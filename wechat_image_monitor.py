@@ -339,12 +339,12 @@ class WeChatImageMonitor:
                 print(f"目录无写入权限: {e}")
                 print("\n请手动设置目录权限：")
                 print("1. 右键点击 C:\\photo 文件夹")
-                print("2. 选择"属性"")
-                print("3. 点击"安全"标签")
-                print("4. 点击"编辑"")
-                print("5. 选择"Users"或你的用户名")
-                print("6. 勾选"完全控制"的"允许"")
-                print("7. 点击"应用"和"确定"")
+                print("2. 选择属性")
+                print("3. 点击安全标签")
+                print("4. 点击编辑")
+                print("5. 选择Users或你的用户名")
+                print("6. 勾选完全控制的允许")
+                print("7. 点击应用和确定")
                 return False
 
         except Exception as e:
