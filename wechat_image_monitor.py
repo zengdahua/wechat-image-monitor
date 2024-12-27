@@ -6,12 +6,14 @@ class WeChatImageMonitor:
     def __init__(self):
         self.wcf = Wcf()
         self.base_path = "C:\\photo"
+        print("WeChat Image Monitor Started...")  # 添加启动提示
         
     def create_folder(self, nickname):
         """为每个联系人创建独立文件夹"""
         folder_path = os.path.join(self.base_path, nickname)
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
+            print(f"Created folder for: {nickname}")  # 添加文件夹创建提示
         return folder_path
 
     def get_next_image_number(self, folder_path):
@@ -47,8 +49,11 @@ class WeChatImageMonitor:
     def start(self):
         """启动监控"""
         print("开始监控微信图片消息...")
+        print("保存路径: " + self.base_path)  # 添加路径提示
+        
         if not os.path.exists(self.base_path):
             os.makedirs(self.base_path)
+            print("创建主文件夹: " + self.base_path)
             
         self.wcf.enable_receiving_msg()
         self.wcf.register_msg_callback(self.on_message)
@@ -57,7 +62,7 @@ class WeChatImageMonitor:
             while True:
                 pass
         except KeyboardInterrupt:
-            print("停止监控")
+            print("\n停止监控")
             self.wcf.cleanup()
 
 if __name__ == "__main__":
