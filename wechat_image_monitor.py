@@ -292,8 +292,7 @@ class WeChatImageMonitor:
             
             print("正在启用消息接收...")
             try:
-                self.wcf.disable_receiving_msg()  # 先禁用，以防之前的状态
-                time.sleep(1)
+                # 直接启用消息接收
                 result = self.wcf.enable_receiving_msg()
                 print(f"启用消息接收结果: {result}")
             except Exception as e:
@@ -362,9 +361,7 @@ class WeChatImageMonitor:
                         if not self.check_wechat_connection():
                             print("重新连接失败，程序退出")
                             break
-                    # 发送心跳消息
-                    self.wcf.send_text(".", "filehelper")
-                    time.sleep(30)  # 每30秒发送一次心跳
+                    time.sleep(1)
                 except KeyboardInterrupt:
                     print("\n收到停止信号，程序退出...")
                     break
@@ -379,7 +376,6 @@ class WeChatImageMonitor:
         finally:
             try:
                 print("\n正在清理资源...")
-                self.wcf.disable_receiving_msg()
                 self.wcf.cleanup()
             except:
                 pass
