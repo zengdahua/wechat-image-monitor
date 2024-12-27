@@ -108,6 +108,7 @@ class WeChatImageMonitor:
             try:
                 self.wcf.enable_receiving_msg()
                 print("消息接收已启用")
+                print("\n等待接收图片消息中...")
                 
                 while True:
                     try:
@@ -121,8 +122,8 @@ class WeChatImageMonitor:
                                     # 从数据库获取好友昵称
                                     friend_info = self.wcf.query_sql("MicroMsg.db", 
                                         f"SELECT NickName FROM Contact WHERE UserName='{msg.sender}' LIMIT 1")
-                                    if friend_info and friend_info[0]:
-                                        sender_name = friend_info[0][0]
+                                    if friend_info and friend_info[0] and friend_info[0].get("NickName"):
+                                        sender_name = friend_info[0]["NickName"]
                                 except Exception as e:
                                     print(f"获取好友信息失败: {e}")
                                 
@@ -134,9 +135,20 @@ class WeChatImageMonitor:
                                     print(f"创建文件夹: {folder_path}")
                                 
                                 try:
-                                    # 使用 download_image 下载图片
-                                    number = len([f for f in os.listdir(folder_path) if f.endswith('.jpg')]) + 1
-                                    save_path = os.path.join(folder_path, f"{number}.jpg")
+                                    # 获取下一个图片序号
+                                    existing_files = [f for f in os.listdir(folder_path) if f.endswith('.jpg') or f.endswith('.png')]
+                                    next_number = 1
+                                    if existing_files:
+                                        numbers = [int(f.split('.')[0]) for f in existing_files if f.split('.')[0].isdigit()]
+                                        if numbers:
+                                            next_number = max(numbers) + 1
+                                    
+                                    # 确定文件扩展名
+                                    ext = '.jpg'
+                                    if msg.extra and msg.extra.lower().endswith('.png'):
+                                        ext = '.png'
+                                    
+                                    save_path = os.path.join(folder_path, f"{next_number}{ext}")
                                     
                                     # 下载图片
                                     result = self.wcf.download_image(msg.id, msg.extra, folder_path)
@@ -146,29 +158,31 @@ class WeChatImageMonitor:
                                         if decrypted_path:
                                             # 重命名文件
                                             if os.path.exists(decrypted_path):
+                                                if os.path.exists(save_path):
+                                                    os.remove(save_path)  # 如果目标文件已存在，先删除
                                                 os.rename(decrypted_path, save_path)
-                                                print(f"已保存图片: {save_path}")
+                                                print(f"✅ 已保存图片: {save_path}")
                                             else:
-                                                print(f"解密后的图片不存在: {decrypted_path}")
+                                                print(f"❌ 解密后的图片不存在: {decrypted_path}")
                                         else:
-                                            print("解密图片失败")
+                                            print("❌ 解密图片失败")
                                     else:
-                                        print(f"下载图片失败，错误码: {result}")
+                                        print(f"❌ 下载图片失败")
                                     
                                 except Exception as e:
-                                    print(f"处理图片失败: {e}")
+                                    print(f"❌ 处理图片失败: {e}")
                                     
                             except Exception as e:
-                                print(f"处理图片消息失败: {e}")
+                                print(f"❌ 处理图片消息失败: {e}")
                                 
-                        time.sleep(0.1)
+                        time.sleep(0.1)  # 短暂休眠，减少 CPU 占用
                             
                     except KeyboardInterrupt:
                         print("\n收到停止信号，程序退出...")
                         break
                     except Exception as e:
-                        print(f"处理消息失败: {e}")
-                        time.sleep(0.5)
+                        time.sleep(0.1)  # 出错时短暂休眠
+                        continue  # 继续监听，不打印错误
                         
             except Exception as e:
                 print(f"启用消息接收时出错: {e}")
