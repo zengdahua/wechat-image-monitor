@@ -1,35 +1,50 @@
-name: Build EXE
+name: Build Windows Executable
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     
-    - name: Set up Python
-      uses: actions/setup-python@v2
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v4
       with:
-        python-version: '3.9'
+        python-version: 3.8
+        architecture: 'x64'
         
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install pyinstaller
         pip install wcferry
+        pip install cffi
+        pip install pynng
         
-    - name: Build EXE
+    - name: Copy DLL files
       run: |
-        pyinstaller --onefile --clean wechat_image_monitor.py
+        python -c "import wcferry; import os; import shutil; wcferry_path = os.path.dirname(wcferry.__file__); shutil.copy(os.path.join(wcferry_path, 'sdk.dll'), '.'); shutil.copy(os.path.join(wcferry_path, 'spy.dll'), '.'); shutil.copy(os.path.join(wcferry_path, 'spy_debug.dll'), '.')"
+        dir *.dll
+     
+    - name: Build executable
+      run: |
+        pyinstaller --clean --onefile --add-binary "sdk.dll;." --add-binary "spy.dll;." --add-binary "spy_debug.dll;." --hidden-import=cffi --hidden-import=pynng --hidden-import=_cffi_backend wechat_image_monitor.py
+     
+    - name: Package DLL files
+      run: |
+        copy *.dll dist\
         
     - name: Upload artifact
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
-        name: WeChatImageMonitor
-        path: dist/wechat_image_monitor.exe 
+        name: wechat_image_monitor
+        path: |
+          dist/wechat_image_monitor.exe
+          dist/*.dll 
