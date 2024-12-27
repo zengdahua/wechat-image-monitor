@@ -85,6 +85,20 @@ class WeChatImageMonitor:
             print(f"❌ 创建目录失败: {e}")
             return False
 
+    def wait_for_file(self, file_path, max_retries=10, delay=0.5):
+        """等待文件出现"""
+        for i in range(max_retries):
+            if os.path.exists(file_path):
+                # 等待文件写入完成
+                try:
+                    with open(file_path, 'rb') as f:
+                        return True
+                except:
+                    pass
+            print(f"等待文件就绪... ({i+1}/{max_retries})")
+            time.sleep(delay)
+        return False
+
     def save_image(self, msg, sender_name):
         """保存图片的核心逻辑"""
         try:
@@ -99,62 +113,70 @@ class WeChatImageMonitor:
                     return False
             
             try:
-                # 检查原始 .dat 文件是否存在
-                if msg.extra and os.path.exists(msg.extra):
-                    print(f"找到原始文件: {msg.extra}")
-                    
-                    # 生成目标文件名
-                    original_name = os.path.basename(msg.extra)
-                    save_name = original_name.replace('.dat', '.jpg')
-                    save_path = os.path.join(date_path, save_name)
-                    
-                    # 如果文件已存在，添加序号
-                    if os.path.exists(save_path):
-                        name, ext = os.path.splitext(save_name)
-                        counter = 1
-                        while os.path.exists(save_path):
-                            save_path = os.path.join(date_path, f"{name}_{counter}{ext}")
-                            counter += 1
-                    
-                    print(f"开始处理图片... (ID: {msg.id})")
-                    print(f"目标路径: {save_path}")
-                    
-                    try:
-                        # 直接复制原始文件到目标目录
-                        dat_path = os.path.join(date_path, original_name)
-                        shutil.copy2(msg.extra, dat_path)
+                # 检查原始 .dat 文件是否存在，并等待文件就绪
+                if msg.extra:
+                    print(f"等待原始文件: {msg.extra}")
+                    if self.wait_for_file(msg.extra):
+                        print(f"✅ 找到原始文件: {msg.extra}")
                         
-                        # 解密图片
-                        decrypted_path = self.wcf.decrypt_image(dat_path, date_path)
-                        if decrypted_path and os.path.exists(decrypted_path):
-                            print(f"✅ 解密成功: {decrypted_path}")
-                            try:
-                                # 如果目标文件已存在，先删除
-                                if os.path.exists(save_path):
-                                    os.remove(save_path)
-                                
-                                # 重命名文件
-                                os.rename(decrypted_path, save_path)
-                                # 设置文件权限
-                                os.chmod(save_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
-                                print(f"✅ 已保存图片: {save_path}")
-                                
-                                # 清理 .dat 文件
-                                try:
-                                    if os.path.exists(dat_path):
-                                        os.remove(dat_path)
-                                except:
-                                    pass
-                                    
-                                return True
-                            except Exception as e:
-                                print(f"❌ 保存文件失败: {e}")
-                        else:
-                            print(f"❌ 解密失败或文件不存在: {decrypted_path}")
-                    except Exception as e:
-                        print(f"❌ 处理文件失败: {e}")
+                        # 生成目标文件名
+                        original_name = os.path.basename(msg.extra)
+                        save_name = original_name.replace('.dat', '.jpg')
+                        save_path = os.path.join(date_path, save_name)
+                        
+                        # 如果文件已存在，添加序号
+                        if os.path.exists(save_path):
+                            name, ext = os.path.splitext(save_name)
+                            counter = 1
+                            while os.path.exists(save_path):
+                                save_path = os.path.join(date_path, f"{name}_{counter}{ext}")
+                                counter += 1
+                        
+                        print(f"开始处理图片... (ID: {msg.id})")
+                        print(f"目标路径: {save_path}")
+                        
+                        try:
+                            # 直接复制原始文件到目标目录
+                            dat_path = os.path.join(date_path, original_name)
+                            shutil.copy2(msg.extra, dat_path)
+                            
+                            # 等待复制完成
+                            if self.wait_for_file(dat_path):
+                                # 解密图片
+                                decrypted_path = self.wcf.decrypt_image(dat_path, date_path)
+                                if decrypted_path and os.path.exists(decrypted_path):
+                                    print(f"✅ 解密成功: {decrypted_path}")
+                                    try:
+                                        # 如果目标文件已存在，先删除
+                                        if os.path.exists(save_path):
+                                            os.remove(save_path)
+                                        
+                                        # 重命名文件
+                                        os.rename(decrypted_path, save_path)
+                                        # 设置文件权限
+                                        os.chmod(save_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+                                        print(f"✅ 已保存图片: {save_path}")
+                                        
+                                        # 清理 .dat 文件
+                                        try:
+                                            if os.path.exists(dat_path):
+                                                os.remove(dat_path)
+                                        except:
+                                            pass
+                                            
+                                        return True
+                                    except Exception as e:
+                                        print(f"❌ 保存文件失败: {e}")
+                                else:
+                                    print(f"❌ 解密失败或文件不存在: {decrypted_path}")
+                            else:
+                                print("❌ 等待复制完成超时")
+                        except Exception as e:
+                            print(f"❌ 处理文件失败: {e}")
+                    else:
+                        print(f"❌ 等待原始文件超时")
                 else:
-                    print(f"❌ 原始文件不存在: {msg.extra}")
+                    print("❌ 消息中没有文件路径信息")
                 
                 return False
                 
