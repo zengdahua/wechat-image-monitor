@@ -4,11 +4,17 @@ from datetime import datetime
 import sys
 import traceback
 import time
+import shutil
 
 class WeChatImageMonitor:
     def __init__(self):
         try:
             print("正在初始化...")
+            print("正在检查环境...")
+            
+            # 检查并复制 SDK 文件
+            self.check_and_copy_sdk()
+            
             print("正在连接微信...")
             self.wcf = Wcf()
             
@@ -35,7 +41,37 @@ class WeChatImageMonitor:
             print(f"初始化失败: {str(e)}")
             input("按回车键退出...")
             sys.exit(1)
-    
+
+    def check_and_copy_sdk(self):
+        """检查并复制 SDK 文件"""
+        try:
+            # 获取当前程序所在目录
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            
+            # 检查 SDK 文件是否存在
+            sdk_path = os.path.join(current_dir, "sdk.dll")
+            if not os.path.exists(sdk_path):
+                print("未找到 SDK 文件，尝试从 Python 包中复制...")
+                
+                # 从 Python 包目录复制 SDK 文件
+                try:
+                    import wcferry
+                    wcferry_path = os.path.dirname(wcferry.__file__)
+                    src_sdk = os.path.join(wcferry_path, "sdk.dll")
+                    if os.path.exists(src_sdk):
+                        shutil.copy2(src_sdk, sdk_path)
+                        print("SDK 文件复制成功")
+                    else:
+                        raise Exception("无法找到 SDK 文件")
+                except Exception as e:
+                    raise Exception(f"复制 SDK 文件失败: {str(e)}")
+            
+            # 设置环境变量
+            os.environ["PATH"] = current_dir + os.pathsep + os.environ.get("PATH", "")
+            
+        except Exception as e:
+            raise Exception(f"SDK 检查失败: {str(e)}")
+
     def check_wechat_connection(self):
         """检查微信连接状态"""
         try:
