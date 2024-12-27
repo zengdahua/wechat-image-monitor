@@ -16,8 +16,7 @@ class WeChatImageMonitor:
             print("=" * 50)
             print("使用说明：")
             print("1. 确保已安装微信 3.9.11.25 版本")
-            print("2. 以管理员身份安装 WeChatSetup.exe")
-            print("3. 以管理员身份运行本程序")
+            print("2. 以管理员身份运行本程序")
             print("=" * 50)
             
             # 检查微信安装路径
@@ -34,14 +33,13 @@ class WeChatImageMonitor:
                 sys.exit(1)
             
             print("正在连接微信...")
-            self.wcf = Wcf()
+            self.wcf = Wcf(debug=True)  # 启用调试模式
             
             # 检查微信连接状态
             if not self.check_wechat_connection():
                 print("错误：无法连接到微信，请确保：")
                 print("1. 微信已经登录")
                 print("2. 使用的是微信 3.9.11.25 版本")
-                print("3. 已经安装最新版本的 WeChatSetup")
                 input("按回车键退出...")
                 sys.exit(1)
                 
@@ -58,7 +56,6 @@ class WeChatImageMonitor:
             print("请确保：")
             print("1. 已经以管理员身份运行")
             print("2. 微信已经登录")
-            print("3. 已安装 WeChatSetup.exe")
             print("=" * 50)
             
         except Exception as e:
@@ -294,15 +291,65 @@ class WeChatImageMonitor:
                 print(f"创建主文件夹: {self.base_path}")
             
             print("正在启用消息接收...")
-            self.wcf.enable_receiving_msg()
+            try:
+                self.wcf.disable_receiving_msg()  # 先禁用，以防之前的状态
+                time.sleep(1)
+                result = self.wcf.enable_receiving_msg()
+                print(f"启用消息接收结果: {result}")
+            except Exception as e:
+                print(f"启用消息接收时出错: {e}")
+                return
+            
             print("正在注册消息回调...")
-            
-            # 修改消息回调的注册方式
-            def msg_callback(msg):
-                print(f"收到消息: type={msg.type}, id={msg.id}, sender={msg.sender}")
-                self.on_message(msg)
-            
-            self.wcf.on_message = msg_callback
+            try:
+                # 直接定义回调函数
+                def msg_callback(msg):
+                    try:
+                        print(f"\n收到消息回调: type={msg.type}, id={msg.id}, sender={msg.sender}")
+                        
+                        if msg.type == 3:  # 图片消息
+                            print("检测到图片消息，开始处理...")
+                            sender_name = msg.sender
+                            try:
+                                sender_info = self.wcf.get_user_info()
+                                if sender_info:
+                                    sender_name = sender_info.get('name', msg.sender)
+                            except:
+                                pass
+                            
+                            folder_path = os.path.join(self.base_path, sender_name)
+                            if not os.path.exists(folder_path):
+                                os.makedirs(folder_path)
+                            
+                            try:
+                                image_data = self.wcf.get_msg_image(msg.id)
+                                if image_data:
+                                    number = len([f for f in os.listdir(folder_path) if f.endswith('.jpg')]) + 1
+                                    save_path = os.path.join(folder_path, f"{number}.jpg")
+                                    
+                                    with open(save_path, 'wb') as f:
+                                        f.write(image_data)
+                                    print(f"已保存图片: {save_path}")
+                                else:
+                                    print("获取图片数据失败")
+                            except Exception as e:
+                                print(f"保存图片失败: {e}")
+                        else:
+                            print(f"非图片消息，类型: {msg.type}")
+                        
+                    except Exception as e:
+                        print(f"消息回调处理失败: {e}")
+                
+                # 注册回调
+                self.wcf.on_message = msg_callback
+                print("消息回调注册成功")
+                
+                # 发送测试消息确认回调正常工作
+                self.wcf.send_text("图片监控已启动", "filehelper")
+                
+            except Exception as e:
+                print(f"注册消息回调时出错: {e}")
+                return
             
             print("\n程序正在运行中，请不要关闭此窗口...")
             print("按 Ctrl+C 停止程序")
@@ -315,7 +362,9 @@ class WeChatImageMonitor:
                         if not self.check_wechat_connection():
                             print("重新连接失败，程序退出")
                             break
-                    time.sleep(1)
+                    # 发送心跳消息
+                    self.wcf.send_text(".", "filehelper")
+                    time.sleep(30)  # 每30秒发送一次心跳
                 except KeyboardInterrupt:
                     print("\n收到停止信号，程序退出...")
                     break
