@@ -98,65 +98,64 @@ class WeChatImageMonitor:
                 if not self.create_directory_with_permissions(path):
                     return False
             
-            # 使用更简单的临时目录路径
-            temp_dir = os.path.join(self.temp_path, str(msg.id))
-            if not self.create_directory_with_permissions(temp_dir):
-                return False
-            
             try:
-                # 下载到临时目录
+                # 获取原始文件名
+                if msg.extra and os.path.exists(msg.extra):
+                    original_name = os.path.basename(msg.extra)
+                    original_name = original_name.replace('.dat', '.jpg')  # 将 .dat 替换为 .jpg
+                else:
+                    original_name = f"{msg.id}.jpg"
+                
+                # 确定保存路径
+                save_path = os.path.join(date_path, original_name)
+                
+                # 如果文件已存在，添加序号
+                if os.path.exists(save_path):
+                    name, ext = os.path.splitext(original_name)
+                    counter = 1
+                    while os.path.exists(save_path):
+                        save_path = os.path.join(date_path, f"{name}_{counter}{ext}")
+                        counter += 1
+                
                 print(f"开始下载图片... (ID: {msg.id})")
-                print(f"临时目录: {temp_dir}")
+                print(f"目标路径: {save_path}")
                 
-                # 确保路径格式正确
-                download_path = temp_dir.replace('\\', '/')
-                result = self.wcf.download_image(msg.id, msg.extra, download_path)
-                
+                # 直接下载到目标目录
+                result = self.wcf.download_image(msg.id, msg.extra, date_path)
                 if result == 0:  # 下载成功
                     print("✅ 下载成功，开始解密...")
                     
                     # 解密图片
-                    decrypted_path = self.wcf.decrypt_image(msg.extra, download_path)
+                    decrypted_path = self.wcf.decrypt_image(msg.extra, date_path)
                     if decrypted_path and os.path.exists(decrypted_path):
                         print(f"✅ 解密成功: {decrypted_path}")
-                        
-                        # 确定最终的保存路径
-                        original_name = os.path.basename(msg.extra) if msg.extra else f"{msg.id}.jpg"
-                        save_path = os.path.join(date_path, original_name)
-                        
-                        # 如果文件已存在，添加序号
-                        if os.path.exists(save_path):
-                            name, ext = os.path.splitext(original_name)
-                            counter = 1
-                            while os.path.exists(save_path):
-                                save_path = os.path.join(date_path, f"{name}_{counter}{ext}")
-                                counter += 1
-                        
                         try:
-                            # 复制文件到最终位置
-                            shutil.copy2(decrypted_path, save_path)
-                            # 设置目标文件权限
+                            # 如果目标文件已存在，先删除
+                            if os.path.exists(save_path):
+                                os.remove(save_path)
+                            
+                            # 重命名文件
+                            os.rename(decrypted_path, save_path)
+                            # 设置文件权限
                             os.chmod(save_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
                             print(f"✅ 已保存图片: {save_path}")
                             return True
                         except Exception as e:
-                            print(f"❌ 复制文件失败: {e}")
+                            print(f"❌ 保存文件失败: {e}")
                     else:
                         print(f"❌ 解密失败或文件不存在: {decrypted_path}")
                 else:
                     print(f"❌ 下载失败，错误码: {result}")
-                    print(f"下载参数: id={msg.id}, extra={msg.extra}, path={download_path}")
-            finally:
-                # 清理临时目录
-                try:
-                    shutil.rmtree(temp_dir, ignore_errors=True)
-                except:
-                    pass
+                    print(f"下载参数: id={msg.id}, extra={msg.extra}, path={date_path}")
                 
-            return False
+                return False
+                
+            except Exception as e:
+                print(f"❌ 保存图片失败: {e}")
+                return False
             
         except Exception as e:
-            print(f"❌ 保存图片失败: {e}")
+            print(f"❌ 处理图片失败: {e}")
             return False
 
     def check_wechat_installation(self):
