@@ -165,31 +165,41 @@ class WeChatImageMonitor:
         """检查微信连接状态"""
         try:
             print("正在测试微信连接...")
-            # 尝试获取自己的信息作为连接测试
+            # 检查微信是否登录
+            if not self.wcf.is_login():
+                print("错误: 微信未登录")
+                return False
+
+            # 获取自己的微信 ID
+            self_wxid = self.wcf.get_self_wxid()
+            if not self_wxid:
+                print("错误: 无法获取微信 ID")
+                return False
+
+            print(f"微信 ID: {self_wxid}")
+            
+            # 获取用户信息
+            try:
+                user_info = self.wcf.get_user_info(self_wxid)
+                print(f"已连接到微信账号: {user_info.get('name', 'Unknown')}")
+            except Exception as e:
+                print(f"警告: 无法获取用户信息 ({str(e)})")
+                print("继续运行...")
+
+            # 启用消息接收
+            print("正在启用消息接收...")
             self.wcf.enable_receiving_msg()
             print("消息接收已启用")
-            
-            # 获取登录用户信息 - 使用新的 API
+
+            # 发送测试消息确认连接
             try:
-                # 尝试使用 get_self_info
-                self_info = self.wcf.get_self_info()
-                print(f"已连接到微信账号: {self_info.name}")
-            except AttributeError:
-                # 如果 get_self_info 不存在，尝试使用其他方法
-                try:
-                    # 尝试使用 get_user_info
-                    self_info = self.wcf.get_user_info()
-                    print(f"已连接到微信账号: {self_info.get('name', 'Unknown')}")
-                except:
-                    # 如果都失败了，尝试发送一条测试消息给文件传输助手
-                    try:
-                        self.wcf.send_text("WeChat Image Monitor 已启动", "filehelper")
-                        print("已连接到微信（通过测试消息确认）")
-                    except Exception as e:
-                        print(f"发送测试消息失败: {e}")
-                        return False
+                self.wcf.send_text("WeChat Image Monitor 已启动", "filehelper")
+                print("已发送测试消息到文件传输助手")
+            except Exception as e:
+                print(f"警告: 发送测试消息失败 ({str(e)})")
             
             return True
+
         except Exception as e:
             self.log_error(f"微信连接测试失败: {str(e)}")
             print(f"微信连接测试失败: {str(e)}")
@@ -302,8 +312,18 @@ class WeChatImageMonitor:
             print("\n程序正在运行中，请不要关闭此窗口...")
             print("按 Ctrl+C 停止程序")
             
+            # 保持连接的循环
             while True:
-                time.sleep(1)  # 减少 CPU 使用率
+                try:
+                    if not self.wcf.is_login():
+                        print("微信已断开连接，尝试重新连接...")
+                        if not self.check_wechat_connection():
+                            print("重新连接失败，程序退出")
+                            break
+                    time.sleep(1)  # 减少 CPU 使用率
+                except Exception as e:
+                    print(f"连接检查失败: {e}")
+                    time.sleep(5)  # 出错时等待更长时间
                 
         except Exception as e:
             self.log_error(f"程序运行错误: {str(e)}")
