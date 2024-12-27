@@ -150,60 +150,56 @@ class WeChatImageMonitor:
                                 
                                 print(f"发送者: {sender_name}")
                                 
-                                # 创建保存目录
-                                folder_path = os.path.join(self.base_path, sender_name)
+                                # 创建日期文件夹
+                                today = datetime.now().strftime('%Y-%m-%d')
+                                sender_path = os.path.join(self.base_path, sender_name)
+                                date_path = os.path.join(sender_path, today)
+                                
                                 try:
-                                    if not os.path.exists(folder_path):
-                                        os.makedirs(folder_path)
-                                        print(f"创建文件夹: {folder_path}")
+                                    if not os.path.exists(sender_path):
+                                        os.makedirs(sender_path)
+                                    if not os.path.exists(date_path):
+                                        os.makedirs(date_path)
+                                        print(f"创建文件夹: {date_path}")
                                 except Exception as e:
                                     print(f"创建文件夹失败: {e}")
                                     continue
                                 
                                 try:
-                                    # 获取下一个图片序号
-                                    next_number = 1
-                                    try:
-                                        existing_files = [f for f in os.listdir(folder_path) if f.endswith('.jpg') or f.endswith('.png')]
-                                        if existing_files:
-                                            numbers = [int(f.split('.')[0]) for f in existing_files if f.split('.')[0].isdigit()]
-                                            if numbers:
-                                                next_number = max(numbers) + 1
-                                    except Exception as e:
-                                        print(f"获取文件序号失败: {e}")
+                                    # 使用原始文件名
+                                    if msg.extra:
+                                        original_name = os.path.basename(msg.extra)
+                                        # 如果文件名不合法，使用消息ID作为文件名
+                                        if not original_name or len(original_name) < 5:
+                                            original_name = f"{msg.id}.jpg"
+                                    else:
+                                        original_name = f"{msg.id}.jpg"
                                     
-                                    # 确定文件扩展名
-                                    ext = '.jpg'
-                                    if msg.extra and msg.extra.lower().endswith('.png'):
-                                        ext = '.png'
+                                    save_path = os.path.join(date_path, original_name)
                                     
-                                    # 确保文件夹权限正确
-                                    if not self.ensure_folder_permissions(folder_path):
-                                        print("❌ 无法访问保存目录，请检查权限")
-                                        continue
-                                    
-                                    save_path = os.path.join(folder_path, f"{next_number}{ext}")
-                                    temp_path = os.path.join(folder_path, f"temp_{next_number}{ext}")
+                                    # 如果文件已存在，添加序号
+                                    if os.path.exists(save_path):
+                                        name, ext = os.path.splitext(original_name)
+                                        counter = 1
+                                        while os.path.exists(save_path):
+                                            save_path = os.path.join(date_path, f"{name}_{counter}{ext}")
+                                            counter += 1
                                     
                                     # 下载图片
                                     print(f"开始下载图片... (ID: {msg.id})")
-                                    print(f"目标路径: {save_path}")
+                                    print(f"保存路径: {save_path}")
                                     
                                     try:
-                                        # 先下载到临时文件
-                                        result = self.wcf.download_image(msg.id, msg.extra, folder_path)
+                                        # 下载图片
+                                        result = self.wcf.download_image(msg.id, msg.extra, date_path)
                                         if result == 0:  # 下载成功
                                             print("✅ 下载成功，开始解密...")
                                             # 解密图片
-                                            decrypted_path = self.wcf.decrypt_image(msg.extra, folder_path)
+                                            decrypted_path = self.wcf.decrypt_image(msg.extra, date_path)
                                             if decrypted_path and os.path.exists(decrypted_path):
                                                 print(f"✅ 解密成功: {decrypted_path}")
                                                 try:
-                                                    # 如果目标文件已存在，先删除
-                                                    if os.path.exists(save_path):
-                                                        os.remove(save_path)
-                                                    
-                                                    # 使用 shutil 来复制文件而不是重命名
+                                                    # 使用 shutil 来复制文件
                                                     import shutil
                                                     shutil.copy2(decrypted_path, save_path)
                                                     
@@ -223,20 +219,14 @@ class WeChatImageMonitor:
                                         
                                     except Exception as e:
                                         print(f"❌ 处理图片失败: {e}")
-                                        # 清理可能的临时文件
-                                        try:
-                                            if os.path.exists(temp_path):
-                                                os.remove(temp_path)
-                                        except:
-                                            pass
-                                    
+                                
                                 except Exception as e:
                                     print(f"❌ 处理图片失败: {e}")
-                                    
+                                
                             except Exception as e:
                                 print(f"❌ 处理图片消息失败: {e}")
                                 
-                        time.sleep(0.1)  # 短暂休眠，减少 CPU 占用
+                        time.sleep(0.1)
                             
                     except KeyboardInterrupt:
                         print("\n收到停止信号，程序退出...")
