@@ -103,17 +103,24 @@ class WeChatImageMonitor:
                     # 生成文件名（使用原始文件名）
                     original_name = os.path.basename(msg.extra)
                     base_name = os.path.splitext(original_name)[0]
-                    save_path = os.path.join(date_path, f"{base_name}.jpg")
+                    final_path = os.path.join(date_path, f"{base_name}.jpg")
                     
                     # 如果文件已存在，添加序号
-                    if os.path.exists(save_path):
+                    if os.path.exists(final_path):
                         name = base_name
                         counter = 1
-                        while os.path.exists(save_path):
-                            save_path = os.path.join(date_path, f"{name}_{counter}.jpg")
+                        while os.path.exists(final_path):
+                            final_path = os.path.join(date_path, f"{name}_{counter}.jpg")
                             counter += 1
                     
-                    print(f"目标路径: {save_path}")
+                    print(f"最终保存路径: {final_path}")
+                    
+                    # 使用临时目录进行中转
+                    temp_dir = os.path.join(os.environ.get('TEMP'), f'wechat_img_{msg.id}')
+                    if not os.path.exists(temp_dir):
+                        os.makedirs(temp_dir)
+                    
+                    print(f"使用临时目录: {temp_dir}")
                     
                     # 添加重试机制
                     max_retries = 5
@@ -123,34 +130,34 @@ class WeChatImageMonitor:
                         try:
                             print(f"尝试下载图片 (第 {attempt + 1} 次)")
                             
-                            # 1. 下载加密图片
-                            result = self.wcf.download_image(msg.id, msg.extra, date_path)
+                            # 1. 下载加密图片到临时目录
+                            result = self.wcf.download_image(msg.id, msg.extra, temp_dir)
                             
                             if result == 0:  # 下载成功
                                 print("✅ 下载成功，开始解密...")
                                 
-                                # 2. 解密图片
-                                decrypted_path = self.wcf.decrypt_image(msg.extra, date_path)
+                                # 2. 解密图片（在临时目录中）
+                                decrypted_path = self.wcf.decrypt_image(msg.extra, temp_dir)
                                 
                                 if decrypted_path and os.path.exists(decrypted_path):
                                     print(f"✅ 解密成功: {decrypted_path}")
                                     
                                     try:
-                                        # 3. 移动到最终位置
-                                        if os.path.exists(save_path):
-                                            os.remove(save_path)
+                                        # 3. 复制到最终位置
+                                        if os.path.exists(final_path):
+                                            os.remove(final_path)
                                         
-                                        # 移动文件
-                                        shutil.move(decrypted_path, save_path)
+                                        # 使用 shutil.copy2 而不是 move
+                                        shutil.copy2(decrypted_path, final_path)
                                         
                                         # 验证文件
-                                        if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
-                                            print(f"✅ 已保存图片: {save_path}")
+                                        if os.path.exists(final_path) and os.path.getsize(final_path) > 0:
+                                            print(f"✅ 已保存图片: {final_path}")
                                             return True
                                         else:
-                                            print("❌ 文件移动后验证失败")
+                                            print("❌ 文件复制后验证失败")
                                     except Exception as e:
-                                        print(f"❌ 移动文件失败: {e}")
+                                        print(f"❌ 复制文件失败: {e}")
                                 else:
                                     print(f"❌ 解密失败或文件不存在: {decrypted_path}")
                             else:
@@ -165,6 +172,12 @@ class WeChatImageMonitor:
                             if attempt < max_retries - 1:
                                 print(f"等待 {retry_delay} 秒后重试...")
                                 time.sleep(retry_delay)
+                        finally:
+                            # 清理临时目录
+                            try:
+                                shutil.rmtree(temp_dir, ignore_errors=True)
+                            except:
+                                pass
                     
                     print("❌ 所有尝试都失败了")
                     
