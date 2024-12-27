@@ -91,24 +91,68 @@ class WeChatImageMonitor:
             temp_dir = os.path.join(os.environ.get('TEMP', os.path.expanduser('~')), 'wechat_monitor')
             if not os.path.exists(temp_dir):
                 os.makedirs(temp_dir)
-
-            # SDK 文件内容（Base64 编码）
-            sdk_base64 = """AAACBAAAAAAAAACjjAYABAAAAaQAAAAAAAAA44wGAAQAAAHAAAAAAAAAAUOMBgAEAAAABAAAAAAAAAPDWAYABAAAAggAAAAAAAABo4wGAAQAAAIwAAAAAAAAAgOMBgAEAAACFAAAAAAAAAJjjAYABAAAADQAAAAAAAACo4wGAAQAAAIYAAAAAAAAAwOMBgAEAAACHAAAAAAAAANDjAYABAAAAHgAAAAAAAADo4wGAAQAAACQAAAAAAAAACNcBgAEAAAALAAAAAAAAACjXAYABAAAAIgAAAAAAAAAA5AGAAQAAAH8AAAAAAAAAGOQBgAEAAACJAAAAAAAAADDkAYABAAAAiwAAAAAAAABA5AGAAQAAAIoAAAAAAAAAUOQBgAEAAAAXAAAAAAAAAGDkAYABAAAAGAAAAAAAAACA5AGAAQAAAB8AAAAAAAAAmOQBgAEAAAByAAAAAAAAAKjkAYABAAAAhAAAAAAAAADI5AGAAQAAAIgAAAAAAAAA2OQBgAEAAABhZGRyZXNzIGZhbWlseSBub3Qgc3VwcG9ydGVkAAAAAGFkZHJlc3MgaW4gdXNlAABhZGRyZXNzIG5vdCBhdmFpbGFibGUAAABhbHJlYWR5IGNvbm5lY3RlZAAAAAAAAABhcmd1bWVudCBsaXN0IHRvbyBsb25nAABhcmd1bWVudCBvdXQgb2YgZG9tYWluAABiYWQgYWRkcmVzcwAAAAAAYmFkIGZpbGUgZGVzY3JpcHRvcgAAAAAAYmFkIG1lc3NhZ2UAAAAAAGJyb2tlbiBwaXBlAAAAAABjb25uZWN0aW9uIGFib3J0ZWQAAAAAAABjb25uZWN0aW9uIGFscmVhZHkgaW4gcHJvZ3Jlc3MAAGNvbm5lY3Rpb24gcmVmdXNlZAAAAAAAAGNvbm5lY3Rpb24gcmVzZXQAAAAAAAAAAGNyb3NzIGRldmljZSBsaW5rAAAAAAAAAGRlc3RpbmF0aW9uIGFkZHJlc3MgcmVxdWlyZWQAAAAAZGlyZWN0b3J5IG5vdCBlbXB0eQAAAAAAZXhlY3V0YWJsZSBmb3JtYXQgZXJyb3IAZmlsZSBleGlzdHMAAAAAAGZpbGUgdG9vIGxhcmdlAABmaWxlbmFtZSB0b28gbG9uZwAAAAAAAABmdW5jdGlvbiBub3Qgc3VwcG9ydGVkAABob3N0IHVucmV..."""  # 这里是完整的 base64 字符串
+                print(f"创建临时目录: {temp_dir}")
 
             # 保存 SDK 文件
             sdk_path = os.path.join(temp_dir, 'sdk.dll')
+            
+            # 如果文件已存在，先删除
+            if os.path.exists(sdk_path):
+                try:
+                    os.remove(sdk_path)
+                    print("删除旧的 SDK 文件")
+                except Exception as e:
+                    print(f"无法删除旧的 SDK 文件: {e}")
+
+            print("正在准备 SDK 文件...")
+            
+            # 尝试从 wcferry 包中直接复制
+            try:
+                wcferry_path = os.path.dirname(wcferry.__file__)
+                src_sdk = os.path.join(wcferry_path, "sdk.dll")
+                if os.path.exists(src_sdk):
+                    print(f"从 wcferry 包复制 SDK: {src_sdk}")
+                    shutil.copy2(src_sdk, sdk_path)
+                    print("SDK 文件复制成功")
+                else:
+                    # 搜索整个包目录
+                    print("在 wcferry 包中搜索 sdk.dll...")
+                    found = False
+                    for root, dirs, files in os.walk(wcferry_path):
+                        if 'sdk.dll' in files:
+                            src_path = os.path.join(root, 'sdk.dll')
+                            print(f"找到 SDK 文件: {src_path}")
+                            shutil.copy2(src_path, sdk_path)
+                            found = True
+                            break
+                    
+                    if not found:
+                        raise Exception("在 wcferry 包中未找到 sdk.dll")
+            except Exception as e:
+                print(f"从 wcferry 包复制失败: {e}")
+                raise
+
+            # 验证文件
             if not os.path.exists(sdk_path):
-                print("正在准备 SDK 文件...")
-                sdk_content = base64.b64decode(sdk_base64)
-                with open(sdk_path, 'wb') as f:
-                    f.write(sdk_content)
-                print("SDK 文件已准备就绪")
+                raise Exception("SDK 文件未能成功创建")
+            
+            file_size = os.path.getsize(sdk_path)
+            print(f"SDK 文件大小: {file_size} bytes")
+            
+            if file_size == 0:
+                raise Exception("SDK 文件大小为 0")
 
             # 设置环境变量
+            print("设置环境变量...")
             os.environ["PATH"] = temp_dir + os.pathsep + os.environ.get("PATH", "")
+            print(f"当前 PATH: {os.environ['PATH']}")
+            
+            return True
             
         except Exception as e:
-            raise Exception(f"设置 SDK 环境失败: {str(e)}")
+            self.log_error(f"设置 SDK 环境失败: {str(e)}")
+            print(f"设置 SDK 环境失败: {str(e)}")
+            return False
 
     def check_wechat_connection(self):
         """检查微信连接状态"""
