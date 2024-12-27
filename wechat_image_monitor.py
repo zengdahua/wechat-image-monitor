@@ -23,13 +23,11 @@ class WeChatImageMonitor:
             
             # 初始化保存路径
             self.base_path = "C:\\photo"
+            if not os.path.exists(self.base_path):
+                os.makedirs(self.base_path)
             
-            # 设置微信缓存路径
-            self.wechat_cache = "C:\\Users\\admin\\Documents\\WeChat Files\\wxid_zsop2jcbf4q622\\FileStorage\\MsgAttach\\9e20f478899dc29eb19741386f9343c8\\Image"
-            print(f"微信图片缓存路径: {self.wechat_cache}")
-            
-            # 确保目录存在并设置权限
-            self.setup_directories()
+            # 设置目录权限
+            os.chmod(self.base_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
             
             # 连接微信，增加重试机制
             print("正在连接微信...")
@@ -48,29 +46,8 @@ class WeChatImageMonitor:
             if not os.path.exists(self.base_path):
                 os.makedirs(self.base_path)
             
-            # 创建临时目录
-            if not os.path.exists(self.temp_path):
-                os.makedirs(self.temp_path)
-            
             # 设置目录权限
-            def set_permissions(path):
-                try:
-                    # 给予完全控制权限
-                    os.chmod(path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)  # 777 权限
-                    
-                    # 遍历子目录
-                    for root, dirs, files in os.walk(path):
-                        for d in dirs:
-                            os.chmod(os.path.join(root, d), stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
-                        for f in files:
-                            os.chmod(os.path.join(root, f), stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
-                except Exception as e:
-                    print(f"设置权限失败: {e}")
-
-            # 设置主目录和临时目录的权限
-            set_permissions(self.base_path)
-            set_permissions(self.temp_path)
-            
+            os.chmod(self.base_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
             print(f"✅ 目录权限设置完成")
             
         except Exception as e:
@@ -235,7 +212,6 @@ class WeChatImageMonitor:
         try:
             print("开始监控微信图片消息...")
             print(f"保存路径: {self.base_path}")
-            print(f"临时路径: {self.temp_path}")
             
             print("正在启用消息接收...")
             try:
@@ -267,8 +243,6 @@ class WeChatImageMonitor:
                             except Exception as e:
                                 print(f"❌ 处理图片消息失败: {e}")
                                 
-                        time.sleep(0.1)
-                            
                     except KeyboardInterrupt:
                         print("\n收到停止信号，程序退出...")
                         break
@@ -288,8 +262,6 @@ class WeChatImageMonitor:
             try:
                 print("\n正在清理资源...")
                 self.wcf.cleanup()
-                # 清理临时目录
-                shutil.rmtree(self.temp_path, ignore_errors=True)
             except:
                 pass
 
