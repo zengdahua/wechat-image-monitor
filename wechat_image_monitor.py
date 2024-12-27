@@ -94,48 +94,48 @@ class WeChatImageMonitor:
             
             try:
                 if msg.id and msg.extra:
-                    print(f"开始下载图片... (ID: {msg.id})")
+                    print(f"开始获取图片... (ID: {msg.id})")
                     
-                    # 生成文件名
-                    file_name = f"{msg.id}.jpg"
-                    save_path = os.path.join(date_path, file_name)
+                    # 生成文件名（使用原始文件名）
+                    original_name = os.path.basename(msg.extra)
+                    base_name = os.path.splitext(original_name)[0]
+                    save_path = os.path.join(date_path, f"{base_name}.jpg")
                     
                     # 如果文件已存在，添加序号
                     if os.path.exists(save_path):
-                        name, ext = os.path.splitext(file_name)
+                        name = base_name
                         counter = 1
                         while os.path.exists(save_path):
-                            save_path = os.path.join(date_path, f"{name}_{counter}{ext}")
+                            save_path = os.path.join(date_path, f"{name}_{counter}.jpg")
                             counter += 1
                     
                     print(f"目标路径: {save_path}")
                     
+                    # 尝试获取原图
                     try:
-                        # 1. 下载加密的图片
-                        result = self.wcf.download_image(msg.id, msg.extra, date_path)
-                        if result == 0:  # 下载成功
-                            print("✅ 下载成功，开始解密...")
-                            
-                            # 2. 解密图片
-                            decrypted_path = self.wcf.decrypt_image(msg.extra, date_path)
-                            if decrypted_path and os.path.exists(decrypted_path):
-                                print(f"✅ 解密成功: {decrypted_path}")
-                                try:
-                                    # 3. 移动到最终位置
-                                    if os.path.exists(save_path):
-                                        os.remove(save_path)
-                                    os.rename(decrypted_path, save_path)
-                                    print(f"✅ 已保存图片: {save_path}")
-                                    return True
-                                except Exception as e:
-                                    print(f"❌ 移动文件失败: {e}")
-                            else:
-                                print(f"❌ 解密失败或文件不存在")
-                        else:
-                            print(f"❌ 下载失败，错误码: {result}")
-                            print(f"消息信息: id={msg.id}, extra={msg.extra}")
-                    except Exception as e:
-                        print(f"❌ 处理图片失败: {e}")
+                        image_data = self.wcf.get_msg_image(msg.id)
+                        if image_data:
+                            with open(save_path, 'wb') as f:
+                                f.write(image_data)
+                            print(f"✅ 已保存原图: {save_path}")
+                            return True
+                    except:
+                        print("获取原图失败，尝试获取缩略图...")
+                        
+                    # 如果原图获取失败，尝试获取缩略图
+                    try:
+                        thumb_data = self.wcf.get_msg_image_thumb(msg.id)
+                        if thumb_data:
+                            thumb_path = save_path.replace('.jpg', '_thumb.jpg')
+                            with open(thumb_path, 'wb') as f:
+                                f.write(thumb_data)
+                            print(f"✅ 已保存缩略图: {thumb_path}")
+                            return True
+                    except:
+                        print("获取缩略图也失败了")
+                    
+                    print("尝试其他方法...")
+                    
                 else:
                     print("❌ 消息中缺少必要信息")
                     print(f"msg.id: {msg.id}")
