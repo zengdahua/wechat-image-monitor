@@ -121,34 +121,28 @@ class WeChatImageMonitor:
             # 需要检查的文件列表
             required_files = ['sdk.dll', 'spy.dll', 'spy_debug.dll']
             
-            # 检查并创建临时目录
-            temp_dir = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Temp', '1', '_MEI102162', 'wcferry')
-            if not os.path.exists(temp_dir):
-                os.makedirs(temp_dir)
-            print(f"临时目录: {temp_dir}")
-
-            # 复制文件到临时目录
+            # 检查当前目录下的文件
+            missing_files = []
             for file_name in required_files:
-                source_file = os.path.join(current_dir, file_name)
-                target_file = os.path.join(temp_dir, file_name)
-                
-                if os.path.exists(source_file):
-                    try:
-                        shutil.copy2(source_file, target_file)
-                        print(f"成功复制 {file_name} 到临时目录")
-                    except Exception as e:
-                        print(f"复制 {file_name} 失败: {e}")
-                        return False
+                if not os.path.exists(os.path.join(current_dir, file_name)):
+                    missing_files.append(file_name)
+            
+            if missing_files:
+                print("\n以下文件缺失，请确保它们与程序在同一目录：")
+                for f in missing_files:
+                    print(f"- {f}")
+                print(f"\n当前目录: {current_dir}")
+                return False
 
-            # 设置环境变量，同时包含当前目录和临时目录
-            os.environ["PATH"] = current_dir + os.pathsep + temp_dir + os.pathsep + os.environ.get("PATH", "")
+            # 设置环境变量
+            os.environ["PATH"] = current_dir + os.pathsep + os.environ.get("PATH", "")
             print(f"环境变量 PATH: {os.environ['PATH']}")
 
             # 尝试预加载 DLL
             try:
                 import ctypes
                 for dll_file in required_files:
-                    dll_path = os.path.join(temp_dir, dll_file)
+                    dll_path = os.path.join(current_dir, dll_file)
                     try:
                         ctypes.CDLL(dll_path)
                         print(f"成功加载: {dll_file}")
