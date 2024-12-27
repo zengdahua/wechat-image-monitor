@@ -23,7 +23,10 @@ class WeChatImageMonitor:
             
             # 初始化保存路径
             self.base_path = "C:\\photo"
-            self.temp_path = os.path.join(os.environ.get('TEMP'), 'wechat_images')
+            
+            # 设置微信缓存路径
+            self.wechat_cache = "C:\\Users\\admin\\Documents\\WeChat Files\\wxid_zsop2jcbf4q622\\FileStorage\\MsgAttach\\9e20f478899dc29eb19741386f9343c8\\Image"
+            print(f"微信图片缓存路径: {self.wechat_cache}")
             
             # 确保目录存在并设置权限
             self.setup_directories()
@@ -126,50 +129,26 @@ class WeChatImageMonitor:
                             save_path = os.path.join(date_path, f"{name}_{counter}{ext}")
                             counter += 1
                     
-                    print(f"开始获取图片... (ID: {msg.id})")
+                    print(f"开始下载图片... (ID: {msg.id})")
                     print(f"目标路径: {save_path}")
                     
                     try:
-                        # 使用 get_msg_image 方法获取图片
-                        image_path = self.wcf.get_msg_image(msg)
-                        
-                        if image_path and os.path.exists(image_path):
-                            print(f"✅ 获取图片成功: {image_path}")
-                            try:
-                                # 如果目标文件已存在，先删除
-                                if os.path.exists(save_path):
-                                    os.remove(save_path)
-                                
-                                # 移动文件到目标位置
-                                shutil.move(image_path, save_path)
-                                # 设置文件权限
-                                os.chmod(save_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
-                                print(f"✅ 已保存图片: {save_path}")
-                                return True
-                            except Exception as e:
-                                print(f"❌ 保存文件失败: {e}")
+                        # 直接使用 get_image 方法获取图片数据
+                        image_data = self.wcf.get_image(msg.id)
+                        if image_data:
+                            # 直接写入文件
+                            with open(save_path, 'wb') as f:
+                                f.write(image_data)
+                            print(f"✅ 已保存图片: {save_path}")
+                            return True
                         else:
-                            print(f"❌ 获取图片失败")
-                            # 尝试备用方法
-                            try:
-                                print("尝试备用方法...")
-                                # 使用 get_image 方法
-                                image_data = self.wcf.get_image(msg.id)
-                                if image_data:
-                                    with open(save_path, 'wb') as f:
-                                        f.write(image_data)
-                                    print(f"✅ 已保存图片: {save_path}")
-                                    return True
-                                else:
-                                    print("❌ 备用方法也失败了")
-                            except Exception as e:
-                                print(f"❌ 备用方法失败: {e}")
+                            print("❌ 获取图片数据失败")
                     except Exception as e:
-                        print(f"❌ 处理文件失败: {e}")
+                        print(f"❌ 下载图片失败: {e}")
                 else:
                     print("❌ 消息中缺少必要信息")
-                print(f"msg.id: {msg.id}")
-                print(f"msg.extra: {msg.extra}")
+                    print(f"msg.id: {msg.id}")
+                    print(f"msg.extra: {msg.extra}")
                 
                 return False
                 
