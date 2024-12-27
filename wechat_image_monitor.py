@@ -305,36 +305,51 @@ class WeChatImageMonitor:
                             
                             if msg.type == 3:  # 图片消息
                                 print("检测到图片消息，开始处理...")
-                                sender_name = msg.sender
                                 try:
-                                    sender_info = self.wcf.get_user_info()
-                                    if sender_info:
-                                        sender_name = sender_info.get('name', msg.sender)
-                                except:
-                                    pass
-                                
-                                folder_path = os.path.join(self.base_path, sender_name)
-                                if not os.path.exists(folder_path):
-                                    os.makedirs(folder_path)
-                                
-                                try:
-                                    image_data = self.wcf.get_msg_image(msg.id)
-                                    if image_data:
-                                        number = len([f for f in os.listdir(folder_path) if f.endswith('.jpg')]) + 1
-                                        save_path = os.path.join(folder_path, f"{number}.jpg")
-                                        
-                                        with open(save_path, 'wb') as f:
-                                            f.write(image_data)
-                                        print(f"已保存图片: {save_path}")
-                                    else:
-                                        print("获取图片数据失败")
+                                    # 获取发送者信息
+                                    sender_info = self.wcf.get_user_info(msg.sender)
+                                    sender_name = sender_info.get('name', msg.sender) if sender_info else msg.sender
+                                    print(f"发送者昵称: {sender_name}")
+                                    
+                                    folder_path = os.path.join(self.base_path, sender_name)
+                                    if not os.path.exists(folder_path):
+                                        os.makedirs(folder_path)
+                                        print(f"创建文件夹: {folder_path}")
+                                    
+                                    try:
+                                        # 使用新的方法名获取图片
+                                        image_data = self.wcf.download_image(msg.id)
+                                        if image_data:
+                                            number = len([f for f in os.listdir(folder_path) if f.endswith('.jpg')]) + 1
+                                            save_path = os.path.join(folder_path, f"{number}.jpg")
+                                            
+                                            with open(save_path, 'wb') as f:
+                                                f.write(image_data)
+                                            print(f"已保存图片: {save_path}")
+                                        else:
+                                            print("获取图片数据失败")
+                                    except AttributeError:
+                                        print("尝试使用备用方法下载图片...")
+                                        try:
+                                            image_data = self.wcf.get_image(msg.id)
+                                            if image_data:
+                                                number = len([f for f in os.listdir(folder_path) if f.endswith('.jpg')]) + 1
+                                                save_path = os.path.join(folder_path, f"{number}.jpg")
+                                                
+                                                with open(save_path, 'wb') as f:
+                                                    f.write(image_data)
+                                                print(f"已保存图片: {save_path}")
+                                            else:
+                                                print("获取图片数据失败")
+                                        except Exception as e:
+                                            print(f"下载图片失败: {e}")
                                 except Exception as e:
-                                    print(f"保存图片失败: {e}")
+                                    print(f"处理图片消息失败: {e}")
                             else:
                                 print(f"非图片消息，类型: {msg.type}")
-                        
-                        time.sleep(0.5)  # 短暂休眠，避免 CPU 占用过高
-                        
+                            
+                            time.sleep(0.5)  # 短暂休眠，避免 CPU 占用过高
+                            
                     except KeyboardInterrupt:
                         print("\n收到停止信号，程序退出...")
                         break
