@@ -111,30 +111,45 @@ class WeChatImageMonitor:
                     
                     print(f"目标路径: {save_path}")
                     
-                    # 尝试获取原图
-                    try:
-                        image_data = self.wcf.get_msg_image(msg.id)
-                        if image_data:
-                            with open(save_path, 'wb') as f:
-                                f.write(image_data)
-                            print(f"✅ 已保存原图: {save_path}")
-                            return True
-                    except:
-                        print("获取原图失败，尝试获取缩略图...")
-                        
-                    # 如果原图获取失败，尝试获取缩略图
-                    try:
-                        thumb_data = self.wcf.get_msg_image_thumb(msg.id)
-                        if thumb_data:
-                            thumb_path = save_path.replace('.jpg', '_thumb.jpg')
-                            with open(thumb_path, 'wb') as f:
-                                f.write(thumb_data)
-                            print(f"✅ 已保存缩略图: {thumb_path}")
-                            return True
-                    except:
-                        print("获取缩略图也失败了")
+                    # 添加重试机制获取原图
+                    max_retries = 5
+                    retry_delay = 2  # 秒
                     
-                    print("尝试其他方法...")
+                    for attempt in range(max_retries):
+                        try:
+                            print(f"尝试获取原图 (第 {attempt + 1} 次)")
+                            image_data = self.wcf.get_msg_image(msg.id)
+                            
+                            if image_data and len(image_data) > 0:
+                                # 确保目标目录存在
+                                os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                                
+                                # 写入文件
+                                with open(save_path, 'wb') as f:
+                                    f.write(image_data)
+                                    
+                                # 验证文件是否写入成功
+                                if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
+                                    print(f"✅ 已保存原图: {save_path}")
+                                    # 设置文件权限
+                                    os.chmod(save_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+                                    return True
+                                else:
+                                    print("❌ 文件写入验证失败")
+                            else:
+                                print("❌ 获取到的图片数据为空")
+                                
+                            if attempt < max_retries - 1:
+                                print(f"等待 {retry_delay} 秒后重试...")
+                                time.sleep(retry_delay)
+                                
+                        except Exception as e:
+                            print(f"❌ 第 {attempt + 1} 次尝试失败: {e}")
+                            if attempt < max_retries - 1:
+                                print(f"等待 {retry_delay} 秒后重试...")
+                                time.sleep(retry_delay)
+                    
+                    print("❌ 所有尝试都失败了")
                     
                 else:
                     print("❌ 消息中缺少必要信息")
