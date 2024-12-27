@@ -118,46 +118,46 @@ class WeChatImageMonitor:
                                 # 获取发送者信息
                                 sender_name = msg.sender
                                 try:
-                                    sender_info = self.wcf.get_info_by_wxid(msg.sender)
-                                    if sender_info:
-                                        sender_name = sender_info.get('name', msg.sender)
-                                except:
-                                    pass
+                                    # 从数据库获取好友昵称
+                                    friend_info = self.wcf.query_sql("MicroMsg.db", 
+                                        f"SELECT NickName FROM Contact WHERE UserName='{msg.sender}' LIMIT 1")
+                                    if friend_info and friend_info[0]:
+                                        sender_name = friend_info[0][0]
+                                except Exception as e:
+                                    print(f"获取好友信息失败: {e}")
+                                
+                                print(f"发送者: {sender_name}")
                                 
                                 folder_path = os.path.join(self.base_path, sender_name)
                                 if not os.path.exists(folder_path):
                                     os.makedirs(folder_path)
+                                    print(f"创建文件夹: {folder_path}")
                                 
                                 try:
-                                    # 下载图片 - 使用新的 API
-                                    image_data = self.wcf.get_image(msg.id)
-                                    if image_data:
-                                        number = len([f for f in os.listdir(folder_path) if f.endswith('.jpg')]) + 1
-                                        save_path = os.path.join(folder_path, f"{number}.jpg")
-                                        
-                                        # 保存图片
-                                        with open(save_path, 'wb') as f:
-                                            f.write(image_data)
-                                        print(f"已保存图片: {save_path}")
-                                    else:
-                                        print("获取图片失败")
-                                except Exception as e:
-                                    print(f"下载图片失败: {e}")
-                                    # 尝试备用方法
-                                    try:
-                                        print("尝试备用方法下载图片...")
-                                        image_data = self.wcf.download_image(msg.id)
-                                        if image_data:
-                                            number = len([f for f in os.listdir(folder_path) if f.endswith('.jpg')]) + 1
-                                            save_path = os.path.join(folder_path, f"{number}.jpg")
-                                            
-                                            with open(save_path, 'wb') as f:
-                                                f.write(image_data)
-                                            print(f"已保存图片: {save_path}")
+                                    # 使用 download_image 下载图片
+                                    number = len([f for f in os.listdir(folder_path) if f.endswith('.jpg')]) + 1
+                                    save_path = os.path.join(folder_path, f"{number}.jpg")
+                                    
+                                    # 下载图片
+                                    result = self.wcf.download_image(msg.id, msg.extra, folder_path)
+                                    if result == 0:  # 下载成功
+                                        # 解密图片
+                                        decrypted_path = self.wcf.decrypt_image(msg.extra, folder_path)
+                                        if decrypted_path:
+                                            # 重命名文件
+                                            if os.path.exists(decrypted_path):
+                                                os.rename(decrypted_path, save_path)
+                                                print(f"已保存图片: {save_path}")
+                                            else:
+                                                print(f"解密后的图片不存在: {decrypted_path}")
                                         else:
-                                            print("获取图片数据失败")
-                                    except Exception as e2:
-                                        print(f"备用方法下载图片失败: {e2}")
+                                            print("解密图片失败")
+                                    else:
+                                        print(f"下载图片失败，错误码: {result}")
+                                    
+                                except Exception as e:
+                                    print(f"处理图片失败: {e}")
+                                    
                             except Exception as e:
                                 print(f"处理图片消息失败: {e}")
                                 
