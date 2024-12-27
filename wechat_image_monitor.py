@@ -128,11 +128,25 @@ class WeChatImageMonitor:
                 print(f"\n目标目录: {current_dir}")
                 return False
 
-            # 设置环境变量
-            print("设置环境变量...")
+            # 设置环境变量，将当前目录放在最前面
             os.environ["PATH"] = current_dir + os.pathsep + os.environ.get("PATH", "")
-            print("所有必需文件已就绪")
             
+            # 尝试预加载 DLL
+            try:
+                import ctypes
+                for dll_file in required_files:
+                    dll_path = os.path.join(current_dir, dll_file)
+                    try:
+                        ctypes.CDLL(dll_path)
+                        print(f"成功加载: {dll_file}")
+                    except Exception as e:
+                        print(f"加载 {dll_file} 失败: {e}")
+                        return False
+            except Exception as e:
+                print(f"DLL 预加载失败: {e}")
+                return False
+
+            print("所有必需文件已就绪")
             return True
             
         except Exception as e:
