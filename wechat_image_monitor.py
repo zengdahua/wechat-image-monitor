@@ -21,13 +21,17 @@ class WeChatImageMonitor:
             # 检查微信安装路径
             self.check_wechat_installation()
             
-            # 初始化保存路径
-            self.base_path = "C:\\photo"
+            # 初始化保存路径 - 使用用户的 Documents 目录
+            documents_path = os.path.join(os.path.expanduser('~'), 'Documents')
+            self.base_path = os.path.join(documents_path, 'WeChatImages')
+            
             if not os.path.exists(self.base_path):
                 os.makedirs(self.base_path)
             
             # 设置目录权限
             os.chmod(self.base_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+            
+            print(f"图片将保存到: {self.base_path}")
             
             # 连接微信，增加重试机制
             print("正在连接微信...")
@@ -94,7 +98,7 @@ class WeChatImageMonitor:
             
             try:
                 if msg.id and msg.extra:
-                    print(f"开始获取图片... (ID: {msg.id})")
+                    print(f"开始处理图片... (ID: {msg.id})")
                     
                     # 生成文件名（使用原始文件名）
                     original_name = os.path.basename(msg.extra)
@@ -111,34 +115,47 @@ class WeChatImageMonitor:
                     
                     print(f"目标路径: {save_path}")
                     
-                    # 添加重试机制获取原图
+                    # 添加重试机制
                     max_retries = 5
                     retry_delay = 2  # 秒
                     
                     for attempt in range(max_retries):
                         try:
-                            print(f"尝试获取原图 (第 {attempt + 1} 次)")
-                            image_data = self.wcf.get_msg_image(msg.id)
+                            print(f"尝试下载图片 (第 {attempt + 1} 次)")
                             
-                            if image_data and len(image_data) > 0:
-                                # 确保目标目录存在
-                                os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                            # 1. 下载加密图片
+                            result = self.wcf.download_image(msg.id, msg.extra, date_path)
+                            
+                            if result == 0:  # 下载成功
+                                print("✅ 下载成功，开始解密...")
                                 
-                                # 写入文件
-                                with open(save_path, 'wb') as f:
-                                    f.write(image_data)
+                                # 2. 解密图片
+                                decrypted_path = self.wcf.decrypt_image(msg.extra, date_path)
+                                
+                                if decrypted_path and os.path.exists(decrypted_path):
+                                    print(f"✅ 解密成功: {decrypted_path}")
                                     
-                                # 验证文件是否写入成功
-                                if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
-                                    print(f"✅ 已保存原图: {save_path}")
-                                    # 设置文件权限
-                                    os.chmod(save_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
-                                    return True
+                                    try:
+                                        # 3. 移动到最终位置
+                                        if os.path.exists(save_path):
+                                            os.remove(save_path)
+                                        
+                                        # 移动文件
+                                        shutil.move(decrypted_path, save_path)
+                                        
+                                        # 验证文件
+                                        if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
+                                            print(f"✅ 已保存图片: {save_path}")
+                                            return True
+                                        else:
+                                            print("❌ 文件移动后验证失败")
+                                    except Exception as e:
+                                        print(f"❌ 移动文件失败: {e}")
                                 else:
-                                    print("❌ 文件写入验证失败")
+                                    print(f"❌ 解密失败或文件不存在: {decrypted_path}")
                             else:
-                                print("❌ 获取到的图片数据为空")
-                                
+                                print(f"❌ 下载失败，错误码: {result}")
+                            
                             if attempt < max_retries - 1:
                                 print(f"等待 {retry_delay} 秒后重试...")
                                 time.sleep(retry_delay)
