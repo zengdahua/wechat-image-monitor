@@ -22,24 +22,12 @@ class WeChatImageMonitor:
             # 检查微信安装路径
             self.check_wechat_installation()
             
-            # 设置 SDK 路径
-            if not self.setup_sdk():
-                print("\n错误：未能找到或复制 sdk.dll 文件")
-                print("请确保：")
-                print("1. 已经安装最新版本的 WeChatSetup")
-                print("2. 微信版本为 3.9.11.25")
-                print("3. 以管理员身份运行本程序")
-                input("按回车键退出...")
-                sys.exit(1)
-            
             print("正在连接微信...")
-            self.wcf = Wcf(debug=True)  # 启用调试模式
+            self.wcf = Wcf(debug=False)  # 关闭调试模式以提高速度
             
             # 检查微信连接状态
             if not self.check_wechat_connection():
-                print("错误：无法连接到微信，请确保：")
-                print("1. 微信已经登录")
-                print("2. 使用的是微信 3.9.11.25 版本")
+                print("错误：无法连接到微信")
                 input("按回车键退出...")
                 sys.exit(1)
                 
@@ -52,11 +40,6 @@ class WeChatImageMonitor:
                 sys.exit(1)
             
             print("WeChat Image Monitor Started...")
-            print("=" * 50)
-            print("请确保：")
-            print("1. 已经以管理员身份运行")
-            print("2. 微信已经登录")
-            print("=" * 50)
             
         except Exception as e:
             self.log_error(f"初始化失败: {str(e)}")
@@ -100,62 +83,6 @@ class WeChatImageMonitor:
         except Exception as e:
             self.log_error(f"检查微信安装路径失败: {str(e)}")
             print(f"检查微信安装路径失败: {str(e)}")
-            return False
-
-    def setup_sdk(self):
-        """设置 SDK 环境"""
-        try:
-            # 获取 exe 所在目录
-            if getattr(sys, 'frozen', False):
-                # 如果是打包后的 exe
-                current_dir = os.path.dirname(sys.executable)
-            else:
-                # 如果是 Python 脚本
-                current_dir = os.path.dirname(os.path.abspath(__file__))
-            
-            print(f"程序运行目录: {current_dir}")
-
-            # 需要检查的文件列表
-            required_files = ['sdk.dll', 'spy.dll', 'spy_debug.dll']
-            
-            # 检查当前目录下的文件
-            missing_files = []
-            for file_name in required_files:
-                if not os.path.exists(os.path.join(current_dir, file_name)):
-                    missing_files.append(file_name)
-            
-            if missing_files:
-                print("\n以下文件缺失，请确保它们与程序在同一目录：")
-                for f in missing_files:
-                    print(f"- {f}")
-                print(f"\n当前目录: {current_dir}")
-                return False
-
-            # 设置环境变量
-            os.environ["PATH"] = current_dir + os.pathsep + os.environ.get("PATH", "")
-            print(f"环境变量 PATH: {os.environ['PATH']}")
-
-            # 尝试预加载 DLL
-            try:
-                import ctypes
-                for dll_file in required_files:
-                    dll_path = os.path.join(current_dir, dll_file)
-                    try:
-                        ctypes.CDLL(dll_path)
-                        print(f"成功加载: {dll_file}")
-                    except Exception as e:
-                        print(f"加载 {dll_file} 失败: {e}")
-                        return False
-            except Exception as e:
-                print(f"DLL 预加载失败: {e}")
-                return False
-
-            print("所有必需文件已就绪")
-            return True
-            
-        except Exception as e:
-            self.log_error(f"设置 SDK 环境失败: {str(e)}")
-            print(f"设置 SDK 环境失败: {str(e)}")
             return False
 
     def check_wechat_connection(self):
@@ -288,45 +215,37 @@ class WeChatImageMonitor:
             
             if not os.path.exists(self.base_path):
                 os.makedirs(self.base_path)
-                print(f"创建主文件夹: {self.base_path}")
             
             print("正在启用消息接收...")
             try:
                 result = self.wcf.enable_receiving_msg()
                 print(f"启用消息接收结果: {result}")
                 
-                # 使用轮询方式接收消息
                 while True:
                     try:
-                        # 获取消息
                         msg = self.wcf.get_msg()
                         if msg:
-                            print(f"\n收到消息: type={msg.type}, id={msg.id}, sender={msg.sender}")
-                            
                             if msg.type == 3:  # 图片消息
-                                print("检测到图片消息，开始处理...")
+                                print(f"\n收到图片消息: {msg.id}")
                                 try:
                                     # 获取发送者信息
-                                    sender_name = msg.sender  # 先用 wxid 作为默认值
+                                    sender_name = msg.sender
                                     try:
-                                        # 获取好友信息
+                                        # 直接从消息中获取发送者信息
                                         friend_info = self.wcf.query_sql("MicroMsg.db", 
-                                            f"SELECT NickName FROM Contact WHERE UserName='{msg.sender}'")
+                                            f"SELECT NickName FROM Contact WHERE UserName='{msg.sender}' LIMIT 1")
                                         if friend_info and friend_info[0]:
-                                            sender_name = friend_info[0][0]  # 使用昵称
-                                    except Exception as e:
-                                        print(f"获取好友信息失败: {e}")
-                                    
-                                    print(f"发送者昵称: {sender_name}")
+                                            sender_name = friend_info[0][0]
+                                    except:
+                                        pass
                                     
                                     folder_path = os.path.join(self.base_path, sender_name)
                                     if not os.path.exists(folder_path):
                                         os.makedirs(folder_path)
-                                        print(f"创建文件夹: {folder_path}")
                                     
                                     try:
-                                        # 使用 download_image 获取图片
-                                        image_data = self.wcf.download_image(msg.id)
+                                        # 使用正确的参数调用 download_image
+                                        image_data = self.wcf.download_image(msg.id, msg, folder_path)
                                         if image_data:
                                             number = len([f for f in os.listdir(folder_path) if f.endswith('.jpg')]) + 1
                                             save_path = os.path.join(folder_path, f"{number}.jpg")
@@ -338,34 +257,16 @@ class WeChatImageMonitor:
                                             print("获取图片数据失败")
                                     except Exception as e:
                                         print(f"下载图片失败: {e}")
-                                        # 尝试备用方法
-                                        try:
-                                            print("尝试备用方法下载图片...")
-                                            image_data = self.wcf.get_msg_media(msg.id)
-                                            if image_data:
-                                                number = len([f for f in os.listdir(folder_path) if f.endswith('.jpg')]) + 1
-                                                save_path = os.path.join(folder_path, f"{number}.jpg")
-                                                
-                                                with open(save_path, 'wb') as f:
-                                                    f.write(image_data)
-                                                print(f"已保存图片: {save_path}")
-                                            else:
-                                                print("获取图片数据失败")
-                                        except Exception as e2:
-                                            print(f"备用方法下载图片失败: {e2}")
                                 except Exception as e:
                                     print(f"处理图片消息失败: {e}")
-                            else:
-                                print(f"非图片消息，类型: {msg.type}")
-                            
-                            time.sleep(0.5)  # 短暂休眠，避免 CPU 占用过高
+                            time.sleep(0.1)  # 减少延迟
                             
                     except KeyboardInterrupt:
                         print("\n收到停止信号，程序退出...")
                         break
                     except Exception as e:
                         print(f"处理消息失败: {e}")
-                        time.sleep(1)
+                        time.sleep(0.5)
                         
             except Exception as e:
                 print(f"启用消息接收时出错: {e}")
