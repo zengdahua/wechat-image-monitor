@@ -12,6 +12,9 @@ class WeChatImageMonitor:
             print("正在初始化...")
             print("正在检查环境...")
             
+            # 检查微信安装路径
+            self.check_wechat_installation()
+            
             # 检查并复制 SDK 文件
             self.check_and_copy_sdk()
             
@@ -42,6 +45,43 @@ class WeChatImageMonitor:
             input("按回车键退出...")
             sys.exit(1)
 
+    def check_wechat_installation(self):
+        """检查微信安装路径"""
+        try:
+            # 常见的微信安装路径
+            possible_paths = [
+                "C:\\Program Files (x86)\\Tencent\\WeChat\\",
+                "C:\\Program Files\\Tencent\\WeChat\\",
+                os.path.expanduser("~\\AppData\\Local\\Tencent\\WeChat\\"),
+                "D:\\Program Files (x86)\\Tencent\\WeChat\\",
+                "D:\\Program Files\\Tencent\\WeChat\\"
+            ]
+            
+            wechat_path = None
+            for path in possible_paths:
+                if os.path.exists(path):
+                    if os.path.exists(os.path.join(path, "WeChat.exe")):
+                        wechat_path = path
+                        break
+            
+            if not wechat_path:
+                print("警告：未找到微信安装路径")
+                print("请确保微信已正确安装")
+                print("推荐的安装位置：")
+                for path in possible_paths:
+                    print(f"- {path}")
+                return False
+            
+            print(f"找到微信安装路径: {wechat_path}")
+            # 将微信路径添加到环境变量
+            os.environ["PATH"] = wechat_path + os.pathsep + os.environ.get("PATH", "")
+            return True
+            
+        except Exception as e:
+            self.log_error(f"检查微信安装路径失败: {str(e)}")
+            print(f"检查微信安装路径失败: {str(e)}")
+            return False
+
     def check_and_copy_sdk(self):
         """检查并复制 SDK 文件"""
         try:
@@ -62,7 +102,13 @@ class WeChatImageMonitor:
                         shutil.copy2(src_sdk, sdk_path)
                         print("SDK 文件复制成功")
                     else:
-                        raise Exception("无法找到 SDK 文件")
+                        # 尝试从微信安装目录复制
+                        wechat_sdk = os.path.join(os.environ.get("WECHAT_PATH", ""), "sdk.dll")
+                        if os.path.exists(wechat_sdk):
+                            shutil.copy2(wechat_sdk, sdk_path)
+                            print("从微信目录复制 SDK 文件成功")
+                        else:
+                            raise Exception("无法找到 SDK 文件")
                 except Exception as e:
                     raise Exception(f"复制 SDK 文件失败: {str(e)}")
             
