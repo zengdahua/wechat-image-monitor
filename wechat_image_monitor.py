@@ -325,8 +325,8 @@ class WeChatImageMonitor:
                                         print(f"创建文件夹: {folder_path}")
                                     
                                     try:
-                                        # 使用 get_msg_image 获取图片
-                                        image_data = self.wcf.get_msg_image(msg.id)
+                                        # 使用 get_image 获取图片
+                                        image_data = self.wcf.get_image(msg.id)
                                         if image_data:
                                             number = len([f for f in os.listdir(folder_path) if f.endswith('.jpg')]) + 1
                                             save_path = os.path.join(folder_path, f"{number}.jpg")
