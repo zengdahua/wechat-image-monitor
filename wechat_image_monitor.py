@@ -13,12 +13,25 @@ class WeChatImageMonitor:
         try:
             print("正在初始化...")
             print("正在检查环境...")
+            print("=" * 50)
+            print("使用说明：")
+            print("1. 确保已安装微信 3.9.11.25 版本")
+            print("2. 以管理员身份安装 WeChatSetup.exe")
+            print("3. 以管理员身份运行本程序")
+            print("=" * 50)
             
             # 检查微信安装路径
             self.check_wechat_installation()
             
-            # 设置 SDK 路径（使用临时目录）
-            self.setup_sdk()
+            # 设置 SDK 路径
+            if not self.setup_sdk():
+                print("\n错误：未能找到或复制 sdk.dll 文件")
+                print("请确保：")
+                print("1. 已经安装最新版本的 WeChatSetup")
+                print("2. 微信版本为 3.9.11.25")
+                print("3. 以管理员身份运行本程序")
+                input("按回车键退出...")
+                sys.exit(1)
             
             print("正在连接微信...")
             self.wcf = Wcf()
@@ -27,8 +40,8 @@ class WeChatImageMonitor:
             if not self.check_wechat_connection():
                 print("错误：无法连接到微信，请确保：")
                 print("1. 微信已经登录")
-                print("2. 使用的是微信 3.9.2.23 版本")
-                print("3. 已经安装 WeChatSetup.exe")
+                print("2. 使用的是微信 3.9.11.25 版本")
+                print("3. 已经安装最新版本的 WeChatSetup")
                 input("按回车键退出...")
                 sys.exit(1)
                 
@@ -88,65 +101,37 @@ class WeChatImageMonitor:
     def setup_sdk(self):
         """设置 SDK 环境"""
         try:
-            # 获取临时目录
-            temp_dir = os.path.join(os.environ.get('TEMP', os.path.expanduser('~')), 'wechat_monitor')
-            if not os.path.exists(temp_dir):
-                os.makedirs(temp_dir)
-                print(f"创建临时目录: {temp_dir}")
+            # 获取 exe 所在目录
+            if getattr(sys, 'frozen', False):
+                # 如果是打包后的 exe
+                current_dir = os.path.dirname(sys.executable)
+            else:
+                # 如果是 Python 脚本
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+            
+            print(f"程序运行目录: {current_dir}")
 
-            # 保存 SDK 文件
-            sdk_path = os.path.join(temp_dir, 'sdk.dll')
+            # 需要检查的文件列表
+            required_files = ['sdk.dll', 'spy.dll', 'spy_debug.dll']
             
-            # 如果文件已存在，先删除
-            if os.path.exists(sdk_path):
-                try:
-                    os.remove(sdk_path)
-                    print("删除旧的 SDK 文件")
-                except Exception as e:
-                    print(f"无法删除旧的 SDK 文件: {e}")
+            # 检查文件是否存在
+            missing_files = []
+            for file_name in required_files:
+                file_path = os.path.join(current_dir, file_name)
+                if not os.path.exists(file_path):
+                    missing_files.append(file_name)
 
-            print("正在准备 SDK 文件...")
-            
-            # 尝试从 wcferry 包中直接复制
-            try:
-                wcferry_path = os.path.dirname(wcferry.__file__)
-                src_sdk = os.path.join(wcferry_path, "sdk.dll")
-                if os.path.exists(src_sdk):
-                    print(f"从 wcferry 包复制 SDK: {src_sdk}")
-                    shutil.copy2(src_sdk, sdk_path)
-                    print("SDK 文件复制成功")
-                else:
-                    # 搜索整个包目录
-                    print("在 wcferry 包中搜索 sdk.dll...")
-                    found = False
-                    for root, dirs, files in os.walk(wcferry_path):
-                        if 'sdk.dll' in files:
-                            src_path = os.path.join(root, 'sdk.dll')
-                            print(f"找到 SDK 文件: {src_path}")
-                            shutil.copy2(src_path, sdk_path)
-                            found = True
-                            break
-                    
-                    if not found:
-                        raise Exception("在 wcferry 包中未找到 sdk.dll")
-            except Exception as e:
-                print(f"从 wcferry 包复制失败: {e}")
-                raise
-
-            # 验证文件
-            if not os.path.exists(sdk_path):
-                raise Exception("SDK 文件未能成功创建")
-            
-            file_size = os.path.getsize(sdk_path)
-            print(f"SDK 文件大小: {file_size} bytes")
-            
-            if file_size == 0:
-                raise Exception("SDK 文件大小为 0")
+            if missing_files:
+                print("\n以下文件缺失，请将它们复制到程序目录:")
+                for f in missing_files:
+                    print(f"- {f}")
+                print(f"\n目标目录: {current_dir}")
+                return False
 
             # 设置环境变量
             print("设置环境变量...")
-            os.environ["PATH"] = temp_dir + os.pathsep + os.environ.get("PATH", "")
-            print(f"当前 PATH: {os.environ['PATH']}")
+            os.environ["PATH"] = current_dir + os.pathsep + os.environ.get("PATH", "")
+            print("所有必需文件已就绪")
             
             return True
             
