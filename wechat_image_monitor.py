@@ -19,49 +19,15 @@ class WeChatImageMonitor:
             # 检查微信安装路径
             self.check_wechat_installation()
             
-            print("正在连接微信...")
-            # 使用本地的 wcferry 库，增加超时时间
-            retry_count = 0
-            max_retries = 3
-            
-            while retry_count < max_retries:
-                try:
-                    self.wcf = Wcf(debug=False)
-                    # 检查微信连接状态
-                    if self.check_wechat_connection():
-                        break
-                    else:
-                        retry_count += 1
-                        if retry_count < max_retries:
-                            print(f"\n连接失败，{5}秒后重试 ({retry_count}/{max_retries})...")
-                            time.sleep(5)
-                        else:
-                            print("\n多次连接失败，请检查：")
-                            print("1. 是否以管理员身份运行")
-                            print("2. 微信是否正常运行")
-                            print("3. 是否安装了正确版本的微信(3.9.11.25)")
-                            input("\n按回车键退出...")
-                            sys.exit(1)
-                except Exception as e:
-                    retry_count += 1
-                    if retry_count < max_retries:
-                        print(f"\n连接出错: {e}")
-                        print(f"5秒后重试 ({retry_count}/{max_retries})...")
-                        time.sleep(5)
-                    else:
-                        print(f"\n连接失败: {e}")
-                        print("\n请检查：")
-                        print("1. 是否以管理员身份运行")
-                        print("2. 微信是否正常运行")
-                        print("3. 是否安装了正确版本的微信(3.9.11.25)")
-                        input("\n按回车键退出...")
-                        sys.exit(1)
-                
+            # 初始化保存路径
             self.base_path = "C:\\photo"
-            
-            # 检查并创建保存目录
             if not os.path.exists(self.base_path):
                 os.makedirs(self.base_path)
+                print(f"创建主文件夹: {self.base_path}")
+            
+            # 连接微信，增加重试机制
+            print("正在连接微信...")
+            self.connect_wechat()
                 
         except Exception as e:
             self.log_error(f"初始化失败: {str(e)}")
@@ -69,81 +35,48 @@ class WeChatImageMonitor:
             input("按回车键退出...")
             sys.exit(1)
 
-    def check_wechat_installation(self):
-        """检查微信安装路径"""
-        try:
-            wechat_path = "C:\\Program Files\\Tencent\\WeChat\\"
-            if not os.path.exists(wechat_path):
-                print("警告：未找到默认微信安装路径")
-                return False
-            
-            print(f"找到微信安装路径: {wechat_path}")
-            return True
-            
-        except Exception as e:
-            self.log_error(f"检查微信安装路径失败: {str(e)}")
-            print(f"检查微信安装路径失败: {str(e)}")
-            return False
+    def connect_wechat(self, max_retries=5):
+        """连接微信，带重试机制"""
+        for i in range(max_retries):
+            try:
+                self.wcf = Wcf(debug=False)
+                if self.check_wechat_connection():
+                    print("✅ 微信连接成功")
+                    return True
+            except Exception as e:
+                print(f"第 {i+1} 次连接失败: {e}")
+                if i < max_retries - 1:
+                    print(f"3秒后重试...")
+                    time.sleep(3)
+                continue
+        
+        print("\n❌ 无法连接到微信，请检查：")
+        print("1. 是否以管理员身份运行")
+        print("2. 微信是否正常运行")
+        print("3. 是否安装了正确版本的微信(3.9.11.25)")
+        input("\n按回车键退出...")
+        sys.exit(1)
 
     def check_wechat_connection(self):
         """检查微信连接状态"""
         try:
-            # 多次尝试登录检查
-            for i in range(3):
-                try:
-                    if self.wcf.is_login():
-                        break
-                    print(f"等待微信登录... ({i+1}/3)")
-                    time.sleep(2)
-                except:
-                    if i == 2:  # 最后一次尝试失败
-                        print("错误: 微信未登录")
-                        return False
-                    time.sleep(2)
-                    continue
+            # 检查登录状态
+            if not self.wcf.is_login():
+                print("等待微信登录...")
+                return False
 
-            # 多次尝试获取微信ID
-            for i in range(3):
-                try:
-                    self_wxid = self.wcf.get_self_wxid()
-                    if self_wxid:
-                        print(f"微信 ID: {self_wxid}")
-                        break
-                    print(f"等待获取微信ID... ({i+1}/3)")
-                    time.sleep(2)
-                except:
-                    if i == 2:  # 最后一次尝试失败
-                        print("错误: 无法获取微信 ID")
-                        return False
-                    time.sleep(2)
-                    continue
+            # 获取微信ID
+            self_wxid = self.wcf.get_self_wxid()
+            if not self_wxid:
+                print("无法获取微信ID")
+                return False
 
-            try:
-                user_info = self.wcf.get_info_by_wxid(self_wxid)
-                print(f"已连接到微信账号: {user_info.get('name', 'Unknown')}")
-            except Exception as e:
-                print(f"警告: 无法获取用户信息 ({str(e)})")
-                print("继续运行...")
-
+            print(f"微信 ID: {self_wxid}")
             return True
 
         except Exception as e:
-            self.log_error(f"微信连接测试失败: {str(e)}")
-            print(f"微信连接测试失败: {str(e)}")
+            print(f"连接测试失败: {e}")
             return False
-
-    def log_error(self, error_msg):
-        """记录错误日志"""
-        try:
-            log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'error.log')
-            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            with open(log_path, 'a', encoding='utf-8') as f:
-                f.write(f"\n[{timestamp}] {error_msg}")
-                if isinstance(error_msg, Exception):
-                    f.write(f"\n{traceback.format_exc()}")
-                f.write("\n" + "="*50 + "\n")
-        except Exception as e:
-            print(f"写入日志失败: {str(e)}")
 
     def start(self):
         try:
@@ -165,7 +98,6 @@ class WeChatImageMonitor:
                                 # 获取发送者信息
                                 sender_name = msg.sender
                                 try:
-                                    # 从数据库获取好友昵称
                                     friend_info = self.wcf.query_sql("MicroMsg.db", 
                                         f"SELECT NickName FROM Contact WHERE UserName='{msg.sender}' LIMIT 1")
                                     if friend_info and friend_info[0] and friend_info[0].get("NickName"):
@@ -177,18 +109,25 @@ class WeChatImageMonitor:
                                 
                                 # 创建保存目录
                                 folder_path = os.path.join(self.base_path, sender_name)
-                                if not os.path.exists(folder_path):
-                                    os.makedirs(folder_path)
-                                    print(f"创建文件夹: {folder_path}")
+                                try:
+                                    if not os.path.exists(folder_path):
+                                        os.makedirs(folder_path)
+                                        print(f"创建文件夹: {folder_path}")
+                                except Exception as e:
+                                    print(f"创建文件夹失败: {e}")
+                                    continue
                                 
                                 try:
                                     # 获取下一个图片序号
-                                    existing_files = [f for f in os.listdir(folder_path) if f.endswith('.jpg') or f.endswith('.png')]
                                     next_number = 1
-                                    if existing_files:
-                                        numbers = [int(f.split('.')[0]) for f in existing_files if f.split('.')[0].isdigit()]
-                                        if numbers:
-                                            next_number = max(numbers) + 1
+                                    try:
+                                        existing_files = [f for f in os.listdir(folder_path) if f.endswith('.jpg') or f.endswith('.png')]
+                                        if existing_files:
+                                            numbers = [int(f.split('.')[0]) for f in existing_files if f.split('.')[0].isdigit()]
+                                            if numbers:
+                                                next_number = max(numbers) + 1
+                                    except Exception as e:
+                                        print(f"获取文件序号失败: {e}")
                                     
                                     # 确定文件扩展名
                                     ext = '.jpg'
@@ -199,7 +138,7 @@ class WeChatImageMonitor:
                                     
                                     # 下载图片
                                     print(f"开始下载图片... (ID: {msg.id})")
-                                    print(f"保存路径: {save_path}")
+                                    print(f"目标路径: {save_path}")
                                     
                                     # 先下载
                                     result = self.wcf.download_image(msg.id, msg.extra, folder_path)
@@ -207,24 +146,22 @@ class WeChatImageMonitor:
                                         print("✅ 下载成功，开始解密...")
                                         # 解密图片
                                         decrypted_path = self.wcf.decrypt_image(msg.extra, folder_path)
-                                        if decrypted_path:
+                                        if decrypted_path and os.path.exists(decrypted_path):
                                             print(f"✅ 解密成功: {decrypted_path}")
-                                            # 重命名文件
-                                            if os.path.exists(decrypted_path):
+                                            try:
                                                 if os.path.exists(save_path):
-                                                    os.remove(save_path)  # 如果目标文件已存在，先删除
+                                                    os.remove(save_path)
                                                 os.rename(decrypted_path, save_path)
                                                 print(f"✅ 已保存图片: {save_path}")
-                                            else:
-                                                print(f"❌ 解密后的图片不存在: {decrypted_path}")
+                                            except Exception as e:
+                                                print(f"❌ 重命名文件失败: {e}")
                                         else:
-                                            print("❌ 解密图片失败")
+                                            print(f"❌ 解密失败或文件不存在: {decrypted_path}")
                                     else:
-                                        print(f"❌ 下载图片失败，错误码: {result}")
+                                        print(f"❌ 下载失败，错误码: {result}")
                                     
                                 except Exception as e:
                                     print(f"❌ 处理图片失败: {e}")
-                                    print(f"消息内容: {msg}")  # 打印完整消息内容以便调试
                                     
                             except Exception as e:
                                 print(f"❌ 处理图片消息失败: {e}")
@@ -235,8 +172,8 @@ class WeChatImageMonitor:
                         print("\n收到停止信号，程序退出...")
                         break
                     except Exception as e:
-                        time.sleep(0.1)  # 出错时短暂休眠
-                        continue  # 继续监听，不打印错误
+                        time.sleep(0.1)
+                        continue
                         
             except Exception as e:
                 print(f"启用消息接收时出错: {e}")
@@ -252,7 +189,6 @@ class WeChatImageMonitor:
                 self.wcf.cleanup()
             except:
                 pass
-            input("\n按回车键退出...")
 
 if __name__ == "__main__":
     monitor = WeChatImageMonitor()
