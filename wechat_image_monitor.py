@@ -35,6 +35,34 @@ class WeChatImageMonitor:
             input("按回车键退出...")
             sys.exit(1)
 
+    def check_wechat_installation(self):
+        """检查微信安装路径"""
+        try:
+            wechat_path = "C:\\Program Files\\Tencent\\WeChat\\"
+            if not os.path.exists(wechat_path):
+                print("警告：未找到默认微信安装路径")
+                return False
+            
+            print(f"找到微信安装路径: {wechat_path}")
+            return True
+            
+        except Exception as e:
+            print(f"检查微信安装路径失败: {e}")
+            return False
+
+    def log_error(self, error_msg):
+        """记录错误日志"""
+        try:
+            log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'error.log')
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            with open(log_path, 'a', encoding='utf-8') as f:
+                f.write(f"\n[{timestamp}] {error_msg}")
+                if isinstance(error_msg, Exception):
+                    f.write(f"\n{traceback.format_exc()}")
+                f.write("\n" + "="*50 + "\n")
+        except Exception as e:
+            print(f"写入日志失败: {e}")
+
     def connect_wechat(self, max_retries=5):
         """连接微信，带重试机制"""
         for i in range(max_retries):
