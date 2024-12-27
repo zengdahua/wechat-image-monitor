@@ -307,7 +307,8 @@ class WeChatImageMonitor:
             print("正在启用消息接收...")
             self.wcf.enable_receiving_msg()
             print("正在注册消息回调...")
-            self.wcf.register_msg_callback(self.on_message)
+            # 使用新的消息回调注册方式
+            self.wcf.on_message = self.on_message
             
             print("\n程序正在运行中，请不要关闭此窗口...")
             print("按 Ctrl+C 停止程序")
