@@ -98,19 +98,25 @@ class WeChatImageMonitor:
                 if not self.create_directory_with_permissions(path):
                     return False
             
-            # 使用临时目录进行下载
-            temp_download_path = os.path.join(self.temp_path, f"temp_{msg.id}")
-            if not self.create_directory_with_permissions(temp_download_path):
+            # 使用更简单的临时目录路径
+            temp_dir = os.path.join(self.temp_path, str(msg.id))
+            if not self.create_directory_with_permissions(temp_dir):
                 return False
             
             try:
                 # 下载到临时目录
-                result = self.wcf.download_image(msg.id, msg.extra, temp_download_path)
+                print(f"开始下载图片... (ID: {msg.id})")
+                print(f"临时目录: {temp_dir}")
+                
+                # 确保路径格式正确
+                download_path = temp_dir.replace('\\', '/')
+                result = self.wcf.download_image(msg.id, msg.extra, download_path)
+                
                 if result == 0:  # 下载成功
                     print("✅ 下载成功，开始解密...")
                     
                     # 解密图片
-                    decrypted_path = self.wcf.decrypt_image(msg.extra, temp_download_path)
+                    decrypted_path = self.wcf.decrypt_image(msg.extra, download_path)
                     if decrypted_path and os.path.exists(decrypted_path):
                         print(f"✅ 解密成功: {decrypted_path}")
                         
@@ -136,16 +142,17 @@ class WeChatImageMonitor:
                         except Exception as e:
                             print(f"❌ 复制文件失败: {e}")
                     else:
-                        print(f"❌ 解密失败或文件不存在")
+                        print(f"❌ 解密失败或文件不存在: {decrypted_path}")
                 else:
                     print(f"❌ 下载失败，错误码: {result}")
+                    print(f"下载参数: id={msg.id}, extra={msg.extra}, path={download_path}")
             finally:
                 # 清理临时目录
                 try:
-                    shutil.rmtree(temp_download_path, ignore_errors=True)
+                    shutil.rmtree(temp_dir, ignore_errors=True)
                 except:
                     pass
-                    
+                
             return False
             
         except Exception as e:
