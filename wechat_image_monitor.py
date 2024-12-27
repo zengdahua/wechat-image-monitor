@@ -292,82 +292,59 @@ class WeChatImageMonitor:
             
             print("正在启用消息接收...")
             try:
-                # 直接启用消息接收
                 result = self.wcf.enable_receiving_msg()
                 print(f"启用消息接收结果: {result}")
+                
+                # 使用轮询方式接收消息
+                while True:
+                    try:
+                        # 获取消息
+                        msg = self.wcf.get_msg()
+                        if msg:
+                            print(f"\n收到消息: type={msg.type}, id={msg.id}, sender={msg.sender}")
+                            
+                            if msg.type == 3:  # 图片消息
+                                print("检测到图片消息，开始处理...")
+                                sender_name = msg.sender
+                                try:
+                                    sender_info = self.wcf.get_user_info()
+                                    if sender_info:
+                                        sender_name = sender_info.get('name', msg.sender)
+                                except:
+                                    pass
+                                
+                                folder_path = os.path.join(self.base_path, sender_name)
+                                if not os.path.exists(folder_path):
+                                    os.makedirs(folder_path)
+                                
+                                try:
+                                    image_data = self.wcf.get_msg_image(msg.id)
+                                    if image_data:
+                                        number = len([f for f in os.listdir(folder_path) if f.endswith('.jpg')]) + 1
+                                        save_path = os.path.join(folder_path, f"{number}.jpg")
+                                        
+                                        with open(save_path, 'wb') as f:
+                                            f.write(image_data)
+                                        print(f"已保存图片: {save_path}")
+                                    else:
+                                        print("获取图片数据失败")
+                                except Exception as e:
+                                    print(f"保存图片失败: {e}")
+                            else:
+                                print(f"非图片消息，类型: {msg.type}")
+                        
+                        time.sleep(0.5)  # 短暂休眠，避免 CPU 占用过高
+                        
+                    except KeyboardInterrupt:
+                        print("\n收到停止信号，程序退出...")
+                        break
+                    except Exception as e:
+                        print(f"处理消息失败: {e}")
+                        time.sleep(1)
+                        
             except Exception as e:
                 print(f"启用消息接收时出错: {e}")
                 return
-            
-            print("正在注册消息回调...")
-            try:
-                # 直接定义回调函数
-                def msg_callback(msg):
-                    try:
-                        print(f"\n收到消息回调: type={msg.type}, id={msg.id}, sender={msg.sender}")
-                        
-                        if msg.type == 3:  # 图片消息
-                            print("检测到图片消息，开始处理...")
-                            sender_name = msg.sender
-                            try:
-                                sender_info = self.wcf.get_user_info()
-                                if sender_info:
-                                    sender_name = sender_info.get('name', msg.sender)
-                            except:
-                                pass
-                            
-                            folder_path = os.path.join(self.base_path, sender_name)
-                            if not os.path.exists(folder_path):
-                                os.makedirs(folder_path)
-                            
-                            try:
-                                image_data = self.wcf.get_msg_image(msg.id)
-                                if image_data:
-                                    number = len([f for f in os.listdir(folder_path) if f.endswith('.jpg')]) + 1
-                                    save_path = os.path.join(folder_path, f"{number}.jpg")
-                                    
-                                    with open(save_path, 'wb') as f:
-                                        f.write(image_data)
-                                    print(f"已保存图片: {save_path}")
-                                else:
-                                    print("获取图片数据失败")
-                            except Exception as e:
-                                print(f"保存图片失败: {e}")
-                        else:
-                            print(f"非图片消息，类型: {msg.type}")
-                        
-                    except Exception as e:
-                        print(f"消息回调处理失败: {e}")
-                
-                # 注册回调
-                self.wcf.on_message = msg_callback
-                print("消息回调注册成功")
-                
-                # 发送测试消息确认回调正常工作
-                self.wcf.send_text("图片监控已启动", "filehelper")
-                
-            except Exception as e:
-                print(f"注册消息回调时出错: {e}")
-                return
-            
-            print("\n程序正在运行中，请不要关闭此窗口...")
-            print("按 Ctrl+C 停止程序")
-            
-            # 保持连接的循环
-            while True:
-                try:
-                    if not self.wcf.is_login():
-                        print("微信已断开连接，尝试重新连接...")
-                        if not self.check_wechat_connection():
-                            print("重新连接失败，程序退出")
-                            break
-                    time.sleep(1)
-                except KeyboardInterrupt:
-                    print("\n收到停止信号，程序退出...")
-                    break
-                except Exception as e:
-                    print(f"连接检查失败: {e}")
-                    time.sleep(5)
                 
         except Exception as e:
             self.log_error(f"程序运行错误: {str(e)}")
