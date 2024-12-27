@@ -46,6 +46,13 @@ class WeChatImageMonitor:
                 sys.exit(1)
                 
             self.base_path = "C:\\photo"
+            
+            # 检查并设置目录权限
+            if not self.check_and_create_photo_dir():
+                print("\n错误：无法访问或创建保存目录")
+                input("按回车键退出...")
+                sys.exit(1)
+            
             print("WeChat Image Monitor Started...")
             print("=" * 50)
             print("请确保：")
@@ -163,13 +170,30 @@ class WeChatImageMonitor:
     def check_wechat_connection(self):
         """检查微信连接状态"""
         try:
+            print("正在测试微信连接...")
             # 尝试获取自己的信息作为连接测试
             self.wcf.enable_receiving_msg()
+            print("消息接收已启用")
+            
+            # 获取登录用户信息
+            self_info = self.wcf.get_self_info()
+            if self_info:
+                print(f"已连接到微信账号: {self_info.name}")
+            else:
+                print("警告: 无法获取微信账号信息")
+                return False
+            
             return True
         except Exception as e:
             self.log_error(f"微信连接测试失败: {str(e)}")
+            print(f"微信连接测试失败: {str(e)}")
+            print("请确保:")
+            print("1. 微信已经登录")
+            print("2. 使用的是微信 3.9.11.25 版本")
+            print("3. WeChatSetup.exe 已正确安装")
+            print("4. 以管理员身份运行本程序")
             return False
-            
+
     def log_error(self, error_msg):
         """记录错误日志"""
         try:
@@ -209,16 +233,30 @@ class WeChatImageMonitor:
 
     def on_message(self, msg):
         try:
+            print(f"\n收到新消息，类型: {msg.type}")  # 添加消息类型调试信息
+            
             if msg.type == 3:  # 图片消息类型
                 print(f"收到新图片消息...")
-                sender = self.wcf.get_info_by_wxid(msg.sender).name
-                print(f"发送者: {sender}")
+                print(f"消息ID: {msg.id}")
+                print(f"发送者ID: {msg.sender}")
                 
-                folder_path = self.create_folder(sender)
+                sender = self.wcf.get_info_by_wxid(msg.sender)
+                if sender:
+                    sender_name = sender.name
+                    print(f"发送者昵称: {sender_name}")
+                else:
+                    print("警告: 无法获取发送者信息")
+                    return
+                    
+                folder_path = self.create_folder(sender_name)
                 if not folder_path:
+                    print("创建文件夹失败")
                     return
                 
+                print(f"保存目录: {folder_path}")
                 number = self.get_next_image_number(folder_path)
+                print(f"图片序号: {number}")
+                
                 print(f"正在下载图片...")
                 image_data = self.wcf.get_msg_image(msg.id)
                 
@@ -231,9 +269,13 @@ class WeChatImageMonitor:
                     print(f"已保存图片: {save_path}")
                 else:
                     print("获取图片数据失败")
+            else:
+                print(f"忽略非图片消息")
+            
         except Exception as e:
             self.log_error(f"处理消息失败: {str(e)}")
             print(f"处理消息失败: {str(e)}")
+            print(f"错误详情: {traceback.format_exc()}")
 
     def start(self):
         try:
@@ -266,6 +308,49 @@ class WeChatImageMonitor:
             except:
                 pass
             input("\n按回车键退出...")
+
+    def check_and_create_photo_dir(self):
+        """检查并创建照片保存目录，确保有写入权限"""
+        try:
+            # 检查目录是否存在
+            if not os.path.exists(self.base_path):
+                try:
+                    # 尝试创建目录
+                    os.makedirs(self.base_path)
+                    print(f"创建目录成功: {self.base_path}")
+                except Exception as e:
+                    print(f"创建目录失败: {e}")
+                    print("请以管理员身份手动创建目录：")
+                    print("1. 打开命令提示符(CMD)，以管理员身份运行")
+                    print("2. 执行以下命令：")
+                    print("   mkdir C:\\photo")
+                    print("   icacls C:\\photo /grant Users:(OI)(CI)F")
+                    return False
+
+            # 测试写入权限
+            test_file = os.path.join(self.base_path, "test_write.tmp")
+            try:
+                with open(test_file, 'w') as f:
+                    f.write("test")
+                os.remove(test_file)
+                print(f"目录 {self.base_path} 写入权限正常")
+                return True
+            except Exception as e:
+                print(f"目录无写入权限: {e}")
+                print("\n请手动设置目录权限：")
+                print("1. 右键点击 C:\\photo 文件夹")
+                print("2. 选择"属性"")
+                print("3. 点击"安全"标签")
+                print("4. 点击"编辑"")
+                print("5. 选择"Users"或你的用户名")
+                print("6. 勾选"完全控制"的"允许"")
+                print("7. 点击"应用"和"确定"")
+                return False
+
+        except Exception as e:
+            self.log_error(f"检查目录权限失败: {str(e)}")
+            print(f"检查目录权限失败: {str(e)}")
+            return False
 
 if __name__ == "__main__":
     try:
