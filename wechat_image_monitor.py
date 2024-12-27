@@ -113,7 +113,7 @@ class WeChatImageMonitor:
                     return False
             
             try:
-                if msg.id and msg.extra:
+                if msg.id:
                     # 生成文件名
                     file_name = f"{msg.id}.jpg"
                     save_path = os.path.join(date_path, file_name)
@@ -126,37 +126,44 @@ class WeChatImageMonitor:
                             save_path = os.path.join(date_path, f"{name}_{counter}{ext}")
                             counter += 1
                     
-                    print(f"开始下载图片... (ID: {msg.id})")
+                    print(f"开始获取图片... (ID: {msg.id})")
                     print(f"目标路径: {save_path}")
                     
                     try:
-                        # 直接下载并解密
-                        result = self.wcf.download_image(msg.id, msg.extra, date_path)
-                        if result == 0:  # 下载成功
-                            print("✅ 下载成功，开始解密...")
-                            
-                            # 解密图片
-                            decrypted_path = self.wcf.decrypt_image(msg.extra, date_path)
-                            if decrypted_path and os.path.exists(decrypted_path):
-                                print(f"✅ 解密成功: {decrypted_path}")
-                                try:
-                                    # 如果目标文件已存在，先删除
-                                    if os.path.exists(save_path):
-                                        os.remove(save_path)
-                                    
-                                    # 重命名文件
-                                    os.rename(decrypted_path, save_path)
-                                    # 设置文件权限
-                                    os.chmod(save_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+                        # 使用 get_msg_image 方法获取图片
+                        image_path = self.wcf.get_msg_image(msg)
+                        
+                        if image_path and os.path.exists(image_path):
+                            print(f"✅ 获取图片成功: {image_path}")
+                            try:
+                                # 如果目标文件已存在，先删除
+                                if os.path.exists(save_path):
+                                    os.remove(save_path)
+                                
+                                # 移动文件到目标位置
+                                shutil.move(image_path, save_path)
+                                # 设置文件权限
+                                os.chmod(save_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+                                print(f"✅ 已保存图片: {save_path}")
+                                return True
+                            except Exception as e:
+                                print(f"❌ 保存文件失败: {e}")
+                        else:
+                            print(f"❌ 获取图片失败")
+                            # 尝试备用方法
+                            try:
+                                print("尝试备用方法...")
+                                # 使用 get_image 方法
+                                image_data = self.wcf.get_image(msg.id)
+                                if image_data:
+                                    with open(save_path, 'wb') as f:
+                                        f.write(image_data)
                                     print(f"✅ 已保存图片: {save_path}")
                                     return True
-                                except Exception as e:
-                                    print(f"❌ 保存文件失败: {e}")
-                            else:
-                                print(f"❌ 解密失败或文件不存在: {decrypted_path}")
-                        else:
-                            print(f"❌ 下载失败，错误码: {result}")
-                            print(f"下载参数: id={msg.id}, extra={msg.extra}, path={date_path}")
+                                else:
+                                    print("❌ 备用方法也失败了")
+                            except Exception as e:
+                                print(f"❌ 备用方法失败: {e}")
                     except Exception as e:
                         print(f"❌ 处理文件失败: {e}")
                 else:
