@@ -129,19 +129,35 @@ class WeChatImageMonitor:
                                     os.makedirs(folder_path)
                                 
                                 try:
-                                    # 下载图片
-                                    image_path = self.wcf.get_msg_image(msg)
-                                    if image_path and os.path.exists(image_path):
+                                    # 下载图片 - 使用新的 API
+                                    image_data = self.wcf.get_image(msg.id)
+                                    if image_data:
                                         number = len([f for f in os.listdir(folder_path) if f.endswith('.jpg')]) + 1
                                         save_path = os.path.join(folder_path, f"{number}.jpg")
                                         
-                                        # 移动图片到目标目录
-                                        os.rename(image_path, save_path)
+                                        # 保存图片
+                                        with open(save_path, 'wb') as f:
+                                            f.write(image_data)
                                         print(f"已保存图片: {save_path}")
                                     else:
                                         print("获取图片失败")
                                 except Exception as e:
                                     print(f"下载图片失败: {e}")
+                                    # 尝试备用方法
+                                    try:
+                                        print("尝试备用方法下载图片...")
+                                        image_data = self.wcf.download_image(msg.id)
+                                        if image_data:
+                                            number = len([f for f in os.listdir(folder_path) if f.endswith('.jpg')]) + 1
+                                            save_path = os.path.join(folder_path, f"{number}.jpg")
+                                            
+                                            with open(save_path, 'wb') as f:
+                                                f.write(image_data)
+                                            print(f"已保存图片: {save_path}")
+                                        else:
+                                            print("获取图片数据失败")
+                                    except Exception as e2:
+                                        print(f"备用方法下载图片失败: {e2}")
                             except Exception as e:
                                 print(f"处理图片消息失败: {e}")
                                 
