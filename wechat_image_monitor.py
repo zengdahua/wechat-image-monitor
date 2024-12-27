@@ -297,8 +297,12 @@ class WeChatImageMonitor:
             self.wcf.enable_receiving_msg()
             print("正在注册消息回调...")
             
-            # 注册消息回调
-            self.wcf.on_message = lambda msg: self.on_message(msg)
+            # 修改消息回调的注册方式
+            def msg_callback(msg):
+                print(f"收到消息: type={msg.type}, id={msg.id}, sender={msg.sender}")
+                self.on_message(msg)
+            
+            self.wcf.on_message = msg_callback
             
             print("\n程序正在运行中，请不要关闭此窗口...")
             print("按 Ctrl+C 停止程序")
@@ -326,6 +330,7 @@ class WeChatImageMonitor:
         finally:
             try:
                 print("\n正在清理资源...")
+                self.wcf.disable_receiving_msg()
                 self.wcf.cleanup()
             except:
                 pass
