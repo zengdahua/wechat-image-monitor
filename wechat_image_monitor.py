@@ -1,6 +1,8 @@
 import os
 import sys
 import time
+import stat
+import shutil
 import traceback
 from datetime import datetime
 from wcferry import Wcf, WxMsg
@@ -21,9 +23,10 @@ class WeChatImageMonitor:
             
             # 初始化保存路径
             self.base_path = "C:\\photo"
-            if not os.path.exists(self.base_path):
-                os.makedirs(self.base_path)
-                print(f"创建主文件夹: {self.base_path}")
+            self.temp_path = os.path.join(os.environ.get('TEMP'), 'wechat_images')
+            
+            # 确保目录存在并设置权限
+            self.setup_directories()
             
             # 连接微信，增加重试机制
             print("正在连接微信...")
@@ -34,6 +37,120 @@ class WeChatImageMonitor:
             print(f"初始化失败: {str(e)}")
             input("按回车键退出...")
             sys.exit(1)
+
+    def setup_directories(self):
+        """设置并确保目录权限"""
+        try:
+            # 创建主目录
+            if not os.path.exists(self.base_path):
+                os.makedirs(self.base_path)
+            
+            # 创建临时目录
+            if not os.path.exists(self.temp_path):
+                os.makedirs(self.temp_path)
+            
+            # 设置目录权限
+            def set_permissions(path):
+                try:
+                    # 给予完全控制权限
+                    os.chmod(path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)  # 777 权限
+                    
+                    # 遍历子目录
+                    for root, dirs, files in os.walk(path):
+                        for d in dirs:
+                            os.chmod(os.path.join(root, d), stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+                        for f in files:
+                            os.chmod(os.path.join(root, f), stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+                except Exception as e:
+                    print(f"设置权限失败: {e}")
+
+            # 设置主目录和临时目录的权限
+            set_permissions(self.base_path)
+            set_permissions(self.temp_path)
+            
+            print(f"✅ 目录权限设置完成")
+            
+        except Exception as e:
+            print(f"❌ 设置目录失败: {e}")
+            raise
+
+    def create_directory_with_permissions(self, path):
+        """创建目录并设置权限"""
+        try:
+            if not os.path.exists(path):
+                os.makedirs(path)
+            os.chmod(path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+            return True
+        except Exception as e:
+            print(f"❌ 创建目录失败: {e}")
+            return False
+
+    def save_image(self, msg, sender_name):
+        """保存图片的核心逻辑"""
+        try:
+            # 创建日期文件夹
+            today = datetime.now().strftime('%Y-%m-%d')
+            sender_path = os.path.join(self.base_path, sender_name)
+            date_path = os.path.join(sender_path, today)
+            
+            # 创建所需的目录
+            for path in [sender_path, date_path]:
+                if not self.create_directory_with_permissions(path):
+                    return False
+            
+            # 使用临时目录进行下载
+            temp_download_path = os.path.join(self.temp_path, f"temp_{msg.id}")
+            if not self.create_directory_with_permissions(temp_download_path):
+                return False
+            
+            try:
+                # 下载到临时目录
+                result = self.wcf.download_image(msg.id, msg.extra, temp_download_path)
+                if result == 0:  # 下载成功
+                    print("✅ 下载成功，开始解密...")
+                    
+                    # 解密图片
+                    decrypted_path = self.wcf.decrypt_image(msg.extra, temp_download_path)
+                    if decrypted_path and os.path.exists(decrypted_path):
+                        print(f"✅ 解密成功: {decrypted_path}")
+                        
+                        # 确定最终的保存路径
+                        original_name = os.path.basename(msg.extra) if msg.extra else f"{msg.id}.jpg"
+                        save_path = os.path.join(date_path, original_name)
+                        
+                        # 如果文件已存在，添加序号
+                        if os.path.exists(save_path):
+                            name, ext = os.path.splitext(original_name)
+                            counter = 1
+                            while os.path.exists(save_path):
+                                save_path = os.path.join(date_path, f"{name}_{counter}{ext}")
+                                counter += 1
+                        
+                        try:
+                            # 复制文件到最终位置
+                            shutil.copy2(decrypted_path, save_path)
+                            # 设置目标文件权限
+                            os.chmod(save_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+                            print(f"✅ 已保存图片: {save_path}")
+                            return True
+                        except Exception as e:
+                            print(f"❌ 复制文件失败: {e}")
+                    else:
+                        print(f"❌ 解密失败或文件不存在")
+                else:
+                    print(f"❌ 下载失败，错误码: {result}")
+            finally:
+                # 清理临时目录
+                try:
+                    shutil.rmtree(temp_download_path, ignore_errors=True)
+                except:
+                    pass
+                    
+            return False
+            
+        except Exception as e:
+            print(f"❌ 保存图片失败: {e}")
+            return False
 
     def check_wechat_installation(self):
         """检查微信安装路径"""
@@ -106,25 +223,11 @@ class WeChatImageMonitor:
             print(f"连接测试失败: {e}")
             return False
 
-    def ensure_folder_permissions(self, folder_path):
-        """确保文件夹存在且有正确的权限"""
-        try:
-            if not os.path.exists(folder_path):
-                os.makedirs(folder_path, exist_ok=True)
-            # 尝试创建测试文件以验证权限
-            test_file = os.path.join(folder_path, '.test')
-            with open(test_file, 'w') as f:
-                f.write('test')
-            os.remove(test_file)
-            return True
-        except Exception as e:
-            print(f"❌ 文件夹权限检查失败: {e}")
-            return False
-
     def start(self):
         try:
             print("开始监控微信图片消息...")
             print(f"保存路径: {self.base_path}")
+            print(f"临时路径: {self.temp_path}")
             
             print("正在启用消息接收...")
             try:
@@ -150,78 +253,8 @@ class WeChatImageMonitor:
                                 
                                 print(f"发送者: {sender_name}")
                                 
-                                # 创建日期文件夹
-                                today = datetime.now().strftime('%Y-%m-%d')
-                                sender_path = os.path.join(self.base_path, sender_name)
-                                date_path = os.path.join(sender_path, today)
-                                
-                                try:
-                                    if not os.path.exists(sender_path):
-                                        os.makedirs(sender_path)
-                                    if not os.path.exists(date_path):
-                                        os.makedirs(date_path)
-                                        print(f"创建文件夹: {date_path}")
-                                except Exception as e:
-                                    print(f"创建文件夹失败: {e}")
-                                    continue
-                                
-                                try:
-                                    # 使用原始文件名
-                                    if msg.extra:
-                                        original_name = os.path.basename(msg.extra)
-                                        # 如果文件名不合法，使用消息ID作为文件名
-                                        if not original_name or len(original_name) < 5:
-                                            original_name = f"{msg.id}.jpg"
-                                    else:
-                                        original_name = f"{msg.id}.jpg"
-                                    
-                                    save_path = os.path.join(date_path, original_name)
-                                    
-                                    # 如果文件已存在，添加序号
-                                    if os.path.exists(save_path):
-                                        name, ext = os.path.splitext(original_name)
-                                        counter = 1
-                                        while os.path.exists(save_path):
-                                            save_path = os.path.join(date_path, f"{name}_{counter}{ext}")
-                                            counter += 1
-                                    
-                                    # 下载图片
-                                    print(f"开始下载图片... (ID: {msg.id})")
-                                    print(f"保存路径: {save_path}")
-                                    
-                                    try:
-                                        # 下载图片
-                                        result = self.wcf.download_image(msg.id, msg.extra, date_path)
-                                        if result == 0:  # 下载成功
-                                            print("✅ 下载成功，开始解密...")
-                                            # 解密图片
-                                            decrypted_path = self.wcf.decrypt_image(msg.extra, date_path)
-                                            if decrypted_path and os.path.exists(decrypted_path):
-                                                print(f"✅ 解密成功: {decrypted_path}")
-                                                try:
-                                                    # 使用 shutil 来复制文件
-                                                    import shutil
-                                                    shutil.copy2(decrypted_path, save_path)
-                                                    
-                                                    # 删除原始文件
-                                                    try:
-                                                        os.remove(decrypted_path)
-                                                    except:
-                                                        pass
-                                                        
-                                                    print(f"✅ 已保存图片: {save_path}")
-                                                except Exception as e:
-                                                    print(f"❌ 保存文件失败: {e}")
-                                            else:
-                                                print(f"❌ 解密失败或文件不存在: {decrypted_path}")
-                                        else:
-                                            print(f"❌ 下载失败，错误码: {result}")
-                                        
-                                    except Exception as e:
-                                        print(f"❌ 处理图片失败: {e}")
-                                
-                                except Exception as e:
-                                    print(f"❌ 处理图片失败: {e}")
+                                # 保存图片
+                                self.save_image(msg, sender_name)
                                 
                             except Exception as e:
                                 print(f"❌ 处理图片消息失败: {e}")
@@ -247,6 +280,8 @@ class WeChatImageMonitor:
             try:
                 print("\n正在清理资源...")
                 self.wcf.cleanup()
+                # 清理临时目录
+                shutil.rmtree(self.temp_path, ignore_errors=True)
             except:
                 pass
 
