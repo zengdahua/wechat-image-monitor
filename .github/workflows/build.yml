@@ -28,9 +28,13 @@ jobs:
         pip install cffi
         pip install pynng
     
+    - name: Copy DLL files
+      run: |
+        python -c "import wcferry; import os; import shutil; wcferry_path = os.path.dirname(wcferry.__file__); shutil.copy(os.path.join(wcferry_path, 'sdk.dll'), '.'); shutil.copy(os.path.join(wcferry_path, 'spy.dll'), '.'); shutil.copy(os.path.join(wcferry_path, 'spy_debug.dll'), '.')"
+    
     - name: Build executable
       run: |
-        pyinstaller --clean --onefile --hidden-import=cffi --hidden-import=pynng --hidden-import=_cffi_backend wechat_image_monitor.py
+        pyinstaller --clean --onefile --add-data "sdk.dll;." --add-data "spy.dll;." --add-data "spy_debug.dll;." --hidden-import=cffi --hidden-import=pynng --hidden-import=_cffi_backend wechat_image_monitor.py
     
     - name: Upload artifact
       uses: actions/upload-artifact@v3
