@@ -106,6 +106,21 @@ class WeChatImageMonitor:
             print(f"连接测试失败: {e}")
             return False
 
+    def ensure_folder_permissions(self, folder_path):
+        """确保文件夹存在且有正确的权限"""
+        try:
+            if not os.path.exists(folder_path):
+                os.makedirs(folder_path, exist_ok=True)
+            # 尝试创建测试文件以验证权限
+            test_file = os.path.join(folder_path, '.test')
+            with open(test_file, 'w') as f:
+                f.write('test')
+            os.remove(test_file)
+            return True
+        except Exception as e:
+            print(f"❌ 文件夹权限检查失败: {e}")
+            return False
+
     def start(self):
         try:
             print("开始监控微信图片消息...")
@@ -162,31 +177,58 @@ class WeChatImageMonitor:
                                     if msg.extra and msg.extra.lower().endswith('.png'):
                                         ext = '.png'
                                     
+                                    # 确保文件夹权限正确
+                                    if not self.ensure_folder_permissions(folder_path):
+                                        print("❌ 无法访问保存目录，请检查权限")
+                                        continue
+                                    
                                     save_path = os.path.join(folder_path, f"{next_number}{ext}")
+                                    temp_path = os.path.join(folder_path, f"temp_{next_number}{ext}")
                                     
                                     # 下载图片
                                     print(f"开始下载图片... (ID: {msg.id})")
                                     print(f"目标路径: {save_path}")
                                     
-                                    # 先下载
-                                    result = self.wcf.download_image(msg.id, msg.extra, folder_path)
-                                    if result == 0:  # 下载成功
-                                        print("✅ 下载成功，开始解密...")
-                                        # 解密图片
-                                        decrypted_path = self.wcf.decrypt_image(msg.extra, folder_path)
-                                        if decrypted_path and os.path.exists(decrypted_path):
-                                            print(f"✅ 解密成功: {decrypted_path}")
-                                            try:
-                                                if os.path.exists(save_path):
-                                                    os.remove(save_path)
-                                                os.rename(decrypted_path, save_path)
-                                                print(f"✅ 已保存图片: {save_path}")
-                                            except Exception as e:
-                                                print(f"❌ 重命名文件失败: {e}")
+                                    try:
+                                        # 先下载到临时文件
+                                        result = self.wcf.download_image(msg.id, msg.extra, folder_path)
+                                        if result == 0:  # 下载成功
+                                            print("✅ 下载成功，开始解密...")
+                                            # 解密图片
+                                            decrypted_path = self.wcf.decrypt_image(msg.extra, folder_path)
+                                            if decrypted_path and os.path.exists(decrypted_path):
+                                                print(f"✅ 解密成功: {decrypted_path}")
+                                                try:
+                                                    # 如果目标文件已存在，先删除
+                                                    if os.path.exists(save_path):
+                                                        os.remove(save_path)
+                                                    
+                                                    # 使用 shutil 来复制文件而不是重命名
+                                                    import shutil
+                                                    shutil.copy2(decrypted_path, save_path)
+                                                    
+                                                    # 删除原始文件
+                                                    try:
+                                                        os.remove(decrypted_path)
+                                                    except:
+                                                        pass
+                                                        
+                                                    print(f"✅ 已保存图片: {save_path}")
+                                                except Exception as e:
+                                                    print(f"❌ 保存文件失败: {e}")
+                                            else:
+                                                print(f"❌ 解密失败或文件不存在: {decrypted_path}")
                                         else:
-                                            print(f"❌ 解密失败或文件不存在: {decrypted_path}")
-                                    else:
-                                        print(f"❌ 下载失败，错误码: {result}")
+                                            print(f"❌ 下载失败，错误码: {result}")
+                                        
+                                    except Exception as e:
+                                        print(f"❌ 处理图片失败: {e}")
+                                        # 清理可能的临时文件
+                                        try:
+                                            if os.path.exists(temp_path):
+                                                os.remove(temp_path)
+                                        except:
+                                            pass
                                     
                                 except Exception as e:
                                     print(f"❌ 处理图片失败: {e}")
