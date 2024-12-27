@@ -178,36 +178,19 @@ class WeChatImageMonitor:
 
             print(f"微信 ID: {self_wxid}")
             
-            # 获取用户信息
+            # 获取用户信息 - 修复参数问题
             try:
-                user_info = self.wcf.get_user_info(self_wxid)
+                user_info = self.wcf.get_user_info()  # 不传参数
                 print(f"已连接到微信账号: {user_info.get('name', 'Unknown')}")
             except Exception as e:
                 print(f"警告: 无法获取用户信息 ({str(e)})")
                 print("继续运行...")
 
-            # 启用消息接收
-            print("正在启用消息接收...")
-            self.wcf.enable_receiving_msg()
-            print("消息接收已启用")
-
-            # 发送测试消息确认连接
-            try:
-                self.wcf.send_text("WeChat Image Monitor 已启动", "filehelper")
-                print("已发送测试消息到文件传输助手")
-            except Exception as e:
-                print(f"警告: 发送测试消息失败 ({str(e)})")
-            
             return True
 
         except Exception as e:
             self.log_error(f"微信连接测试失败: {str(e)}")
             print(f"微信连接测试失败: {str(e)}")
-            print("请确保:")
-            print("1. 微信已经登录")
-            print("2. 使用的是微信 3.9.11.25 版本")
-            print("3. WeChatSetup.exe 已正确安装")
-            print("4. 以管理员身份运行本程序")
             return False
 
     def log_error(self, error_msg):
@@ -248,8 +231,9 @@ class WeChatImageMonitor:
             return 1
 
     def on_message(self, msg):
+        """处理接收到的消息"""
         try:
-            print(f"\n收到新消息，类型: {msg.type}")  # 添加消息类型调试信息
+            print(f"\n收到新消息，类型: {msg.type}")
             
             if msg.type == 3:  # 图片消息类型
                 print(f"收到新图片消息...")
@@ -257,36 +241,41 @@ class WeChatImageMonitor:
                 print(f"发送者ID: {msg.sender}")
                 
                 try:
-                    # 尝试使用新的 API 获取用户信息
-                    sender = self.wcf.get_user_info(msg.sender)
-                    sender_name = sender.get('name', msg.sender)
-                    print(f"发送者昵称: {sender_name}")
-                except:
-                    # 如果失败，使用发送者 ID 作为名称
+                    # 修改获取用户信息的方式
                     sender_name = msg.sender
-                    print(f"使用发送者ID作为名称: {sender_name}")
+                    try:
+                        sender_info = self.wcf.get_user_info()  # 不传参数
+                        if sender_info:
+                            sender_name = sender_info.get('name', msg.sender)
+                    except:
+                        pass
+                    print(f"发送者昵称: {sender_name}")
                     
-                folder_path = self.create_folder(sender_name)
-                if not folder_path:
-                    print("创建文件夹失败")
-                    return
-                
-                print(f"保存目录: {folder_path}")
-                number = self.get_next_image_number(folder_path)
-                print(f"图片序号: {number}")
-                
-                print(f"正在下载图片...")
-                image_data = self.wcf.get_msg_image(msg.id)
-                
-                if image_data:
-                    file_ext = '.jpg'
-                    save_path = os.path.join(folder_path, f"{number}{file_ext}")
+                    folder_path = self.create_folder(sender_name)
+                    if not folder_path:
+                        print("创建文件夹失败")
+                        return
                     
-                    with open(save_path, 'wb') as f:
-                        f.write(image_data)
-                    print(f"已保存图片: {save_path}")
-                else:
-                    print("获取图片数据失败")
+                    print(f"保存目录: {folder_path}")
+                    number = self.get_next_image_number(folder_path)
+                    print(f"图片序号: {number}")
+                    
+                    print(f"正在下载图片...")
+                    try:
+                        image_data = self.wcf.get_msg_image(msg.id)
+                        if image_data:
+                            file_ext = '.jpg'
+                            save_path = os.path.join(folder_path, f"{number}{file_ext}")
+                            
+                            with open(save_path, 'wb') as f:
+                                f.write(image_data)
+                            print(f"已保存图片: {save_path}")
+                        else:
+                            print("获取图片数据失败")
+                    except Exception as e:
+                        print(f"下载图片失败: {e}")
+                except Exception as e:
+                    print(f"处理图片消息失败: {e}")
             else:
                 print(f"忽略非图片消息")
             
@@ -307,8 +296,9 @@ class WeChatImageMonitor:
             print("正在启用消息接收...")
             self.wcf.enable_receiving_msg()
             print("正在注册消息回调...")
-            # 使用新的消息回调注册方式
-            self.wcf.on_message = self.on_message
+            
+            # 注册消息回调
+            self.wcf.on_message = lambda msg: self.on_message(msg)
             
             print("\n程序正在运行中，请不要关闭此窗口...")
             print("按 Ctrl+C 停止程序")
@@ -321,10 +311,13 @@ class WeChatImageMonitor:
                         if not self.check_wechat_connection():
                             print("重新连接失败，程序退出")
                             break
-                    time.sleep(1)  # 减少 CPU 使用率
+                    time.sleep(1)
+                except KeyboardInterrupt:
+                    print("\n收到停止信号，程序退出...")
+                    break
                 except Exception as e:
                     print(f"连接检查失败: {e}")
-                    time.sleep(5)  # 出错时等待更长时间
+                    time.sleep(5)
                 
         except Exception as e:
             self.log_error(f"程序运行错误: {str(e)}")
