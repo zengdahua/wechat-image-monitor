@@ -56,7 +56,8 @@ class WeChatImageMonitor:
                 "C:\\Program Files\\Tencent\\WeChat\\",
                 os.path.expanduser("~\\AppData\\Local\\Tencent\\WeChat\\"),
                 "D:\\Program Files (x86)\\Tencent\\WeChat\\",
-                "D:\\Program Files\\Tencent\\WeChat\\"
+                "D:\\Program Files\\Tencent\\WeChat\\",
+                "D:\\WeChat\\"
             ]
             
             wechat_path = None
