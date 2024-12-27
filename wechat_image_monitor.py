@@ -169,13 +169,25 @@ class WeChatImageMonitor:
             self.wcf.enable_receiving_msg()
             print("消息接收已启用")
             
-            # 获取登录用户信息
-            self_info = self.wcf.get_self_info()
-            if self_info:
+            # 获取登录用户信息 - 使用新的 API
+            try:
+                # 尝试使用 get_self_info
+                self_info = self.wcf.get_self_info()
                 print(f"已连接到微信账号: {self_info.name}")
-            else:
-                print("警告: 无法获取微信账号信息")
-                return False
+            except AttributeError:
+                # 如果 get_self_info 不存在，尝试使用其他方法
+                try:
+                    # 尝试使用 get_user_info
+                    self_info = self.wcf.get_user_info()
+                    print(f"已连接到微信账号: {self_info.get('name', 'Unknown')}")
+                except:
+                    # 如果都失败了，尝试发送一条测试消息给文件传输助手
+                    try:
+                        self.wcf.send_text("WeChat Image Monitor 已启动", "filehelper")
+                        print("已连接到微信（通过测试消息确认）")
+                    except Exception as e:
+                        print(f"发送测试消息失败: {e}")
+                        return False
             
             return True
         except Exception as e:
@@ -234,13 +246,15 @@ class WeChatImageMonitor:
                 print(f"消息ID: {msg.id}")
                 print(f"发送者ID: {msg.sender}")
                 
-                sender = self.wcf.get_info_by_wxid(msg.sender)
-                if sender:
-                    sender_name = sender.name
+                try:
+                    # 尝试使用新的 API 获取用户信息
+                    sender = self.wcf.get_user_info(msg.sender)
+                    sender_name = sender.get('name', msg.sender)
                     print(f"发送者昵称: {sender_name}")
-                else:
-                    print("警告: 无法获取发送者信息")
-                    return
+                except:
+                    # 如果失败，使用发送者 ID 作为名称
+                    sender_name = msg.sender
+                    print(f"使用发送者ID作为名称: {sender_name}")
                     
                 folder_path = self.create_folder(sender_name)
                 if not folder_path:
