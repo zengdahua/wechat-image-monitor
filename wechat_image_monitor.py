@@ -307,8 +307,16 @@ class WeChatImageMonitor:
                                 print("检测到图片消息，开始处理...")
                                 try:
                                     # 获取发送者信息
-                                    sender_info = self.wcf.get_user_info(msg.sender)
-                                    sender_name = sender_info.get('name', msg.sender) if sender_info else msg.sender
+                                    sender_name = msg.sender  # 先用 wxid 作为默认值
+                                    try:
+                                        # 获取好友信息
+                                        friend_info = self.wcf.query_sql("MicroMsg.db", 
+                                            f"SELECT NickName FROM Contact WHERE UserName='{msg.sender}'")
+                                        if friend_info and friend_info[0]:
+                                            sender_name = friend_info[0][0]  # 使用昵称
+                                    except Exception as e:
+                                        print(f"获取好友信息失败: {e}")
+                                    
                                     print(f"发送者昵称: {sender_name}")
                                     
                                     folder_path = os.path.join(self.base_path, sender_name)
@@ -317,8 +325,8 @@ class WeChatImageMonitor:
                                         print(f"创建文件夹: {folder_path}")
                                     
                                     try:
-                                        # 使用新的方法名获取图片
-                                        image_data = self.wcf.download_image(msg.id)
+                                        # 使用 get_msg_image 获取图片
+                                        image_data = self.wcf.get_msg_image(msg.id)
                                         if image_data:
                                             number = len([f for f in os.listdir(folder_path) if f.endswith('.jpg')]) + 1
                                             save_path = os.path.join(folder_path, f"{number}.jpg")
@@ -328,21 +336,8 @@ class WeChatImageMonitor:
                                             print(f"已保存图片: {save_path}")
                                         else:
                                             print("获取图片数据失败")
-                                    except AttributeError:
-                                        print("尝试使用备用方法下载图片...")
-                                        try:
-                                            image_data = self.wcf.get_image(msg.id)
-                                            if image_data:
-                                                number = len([f for f in os.listdir(folder_path) if f.endswith('.jpg')]) + 1
-                                                save_path = os.path.join(folder_path, f"{number}.jpg")
-                                                
-                                                with open(save_path, 'wb') as f:
-                                                    f.write(image_data)
-                                                print(f"已保存图片: {save_path}")
-                                            else:
-                                                print("获取图片数据失败")
-                                        except Exception as e:
-                                            print(f"下载图片失败: {e}")
+                                    except Exception as e:
+                                        print(f"下载图片失败: {e}")
                                 except Exception as e:
                                     print(f"处理图片消息失败: {e}")
                             else:
