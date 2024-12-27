@@ -25,10 +25,12 @@ jobs:
         python -m pip install --upgrade pip
         pip install pyinstaller
         pip install wcferry
+        pip install cffi
+        pip install pynng
     
     - name: Build executable
       run: |
-        pyinstaller --clean --onefile wechat_image_monitor.py
+        pyinstaller --clean --onefile --hidden-import=cffi --hidden-import=pynng --hidden-import=_cffi_backend wechat_image_monitor.py
     
     - name: Upload artifact
       uses: actions/upload-artifact@v3
