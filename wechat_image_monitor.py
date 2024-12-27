@@ -93,7 +93,9 @@ class WeChatImageMonitor:
                     return False
             
             try:
-                if msg.id:
+                if msg.id and msg.extra:
+                    print(f"开始下载图片... (ID: {msg.id})")
+                    
                     # 生成文件名
                     file_name = f"{msg.id}.jpg"
                     save_path = os.path.join(date_path, file_name)
@@ -106,22 +108,34 @@ class WeChatImageMonitor:
                             save_path = os.path.join(date_path, f"{name}_{counter}{ext}")
                             counter += 1
                     
-                    print(f"开始下载图片... (ID: {msg.id})")
                     print(f"目标路径: {save_path}")
                     
                     try:
-                        # 直接使用 get_image 方法获取图片数据
-                        image_data = self.wcf.get_image(msg.id)
-                        if image_data:
-                            # 直接写入文件
-                            with open(save_path, 'wb') as f:
-                                f.write(image_data)
-                            print(f"✅ 已保存图片: {save_path}")
-                            return True
+                        # 1. 下载加密的图片
+                        result = self.wcf.download_image(msg.id, msg.extra, date_path)
+                        if result == 0:  # 下载成功
+                            print("✅ 下载成功，开始解密...")
+                            
+                            # 2. 解密图片
+                            decrypted_path = self.wcf.decrypt_image(msg.extra, date_path)
+                            if decrypted_path and os.path.exists(decrypted_path):
+                                print(f"✅ 解密成功: {decrypted_path}")
+                                try:
+                                    # 3. 移动到最终位置
+                                    if os.path.exists(save_path):
+                                        os.remove(save_path)
+                                    os.rename(decrypted_path, save_path)
+                                    print(f"✅ 已保存图片: {save_path}")
+                                    return True
+                                except Exception as e:
+                                    print(f"❌ 移动文件失败: {e}")
+                            else:
+                                print(f"❌ 解密失败或文件不存在")
                         else:
-                            print("❌ 获取图片数据失败")
+                            print(f"❌ 下载失败，错误码: {result}")
+                            print(f"消息信息: id={msg.id}, extra={msg.extra}")
                     except Exception as e:
-                        print(f"❌ 下载图片失败: {e}")
+                        print(f"❌ 处理图片失败: {e}")
                 else:
                     print("❌ 消息中缺少必要信息")
                     print(f"msg.id: {msg.id}")
