@@ -99,34 +99,47 @@ class WeChatImageMonitor:
             try:
                 if msg.id and msg.extra:
                     print(f"开始处理图片... (ID: {msg.id})")
+                    print(f"原始文件路径: {msg.extra}")
                     
                     # 从数据库获取图片信息
                     try:
-                        sql = f"""
-                        SELECT MsgSvrID, CompressContent, BytesExtra 
+                        sql = """
+                        SELECT MsgSvrID, StrTalker, CreateTime, ImgPath 
                         FROM MSG 
-                        WHERE MsgSvrID='{msg.id}'
+                        WHERE Type=3 AND MsgSvrID=? 
+                        LIMIT 1
                         """
-                        result = self.wcf.query_sql("MSG.db", sql)
+                        result = self.wcf.query_sql("MSG.db", sql, (msg.id,))
+                        
                         if result and result[0]:
                             msg_info = result[0]
-                            print(f"获取到消息信息: {msg_info}")
+                            print(f"数据库信息: {msg_info}")
                             
-                            # 获取图片路径
+                            # 获取图片在本地的路径
                             img_path = msg.extra
+                            if not os.path.exists(img_path):
+                                # 尝试其他可能的路径
+                                wechat_files_dir = os.path.join(os.environ['USERPROFILE'], 
+                                    'Documents', 'WeChat Files')
+                                for root, dirs, files in os.walk(wechat_files_dir):
+                                    if os.path.basename(img_path) in files:
+                                        img_path = os.path.join(root, os.path.basename(img_path))
+                                        break
+                            
                             if os.path.exists(img_path):
                                 print(f"找到原始图片: {img_path}")
                                 
-                                # 生成目标文件名
-                                file_name = f"{msg.id}.jpg"
-                                save_path = os.path.join(date_path, file_name)
+                                # 生成目标文件名（使用原始文件名）
+                                original_name = os.path.basename(img_path)
+                                base_name = os.path.splitext(original_name)[0]
+                                save_path = os.path.join(date_path, f"{base_name}.jpg")
                                 
                                 # 如果文件已存在，添加序号
                                 if os.path.exists(save_path):
-                                    name, ext = os.path.splitext(file_name)
+                                    name = base_name
                                     counter = 1
                                     while os.path.exists(save_path):
-                                        save_path = os.path.join(date_path, f"{name}_{counter}{ext}")
+                                        save_path = os.path.join(date_path, f"{name}_{counter}.jpg")
                                         counter += 1
                                 
                                 print(f"目标路径: {save_path}")
@@ -142,11 +155,12 @@ class WeChatImageMonitor:
                                 except Exception as e:
                                     print(f"❌ 复制文件失败: {e}")
                             else:
-                                print(f"❌ 原始图片不存在: {img_path}")
+                                print(f"❌ 未找到原始图片: {img_path}")
                         else:
-                            print("❌ 未找到消息记录")
+                            print("❌ 未在数据库中找到消息记录")
                     except Exception as e:
                         print(f"❌ 查询数据库失败: {e}")
+                        print(f"错误详情: {traceback.format_exc()}")
                     
                     return False
                     
